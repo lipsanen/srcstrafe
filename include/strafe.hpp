@@ -15,18 +15,20 @@ namespace Strafe
 
 	struct StrafeInput
 	{
-        StrafeType Stype;
-        JumpType Jtype;
-        float CappedLimit;
-		double TargetYaw;
-		float VectorialOffset;
-		float AngleSpeed;
-		float Scale;
-		bool AFH;
-		bool Vectorial;
-		bool JumpOverride;
-		bool Strafe;
-		int Version;
+        float Sidemove = 0.0f;
+        float Forwardmove = 0.0f;
+        StrafeType Stype = StrafeType::MaxAccel;
+        JumpType Jtype = JumpType::ABH;
+        float CappedLimit = 0.0f;
+		double TargetYaw = 0.0;
+		float VectorialOffset = 0.0f;
+		float AngleSpeed = 0.0f;
+		float Scale = 1.0f;
+		bool AFH = true;
+		bool Vectorial = true;
+		bool JumpOverride = true;
+		bool Strafe = true;
+		int Version = 6;
 	};
 
 	struct MovementVars
@@ -63,5 +65,7 @@ namespace Strafe
                     double target);
     StrafeOutput Strafe(const PlayerData& player, const MovementVars& vars, const StrafeInput& input);
     double StrafeTheta(const PlayerData& player, const MovementVars& vars, const StrafeInput& input);
-    void Simulate(PlayerData& player, const MovementVars& vars, const StrafeOutput& output);
+    void Simulate(PlayerData& player, const MovementVars& vars, const StrafeInput& input);
+    bool OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input);
+    
 }

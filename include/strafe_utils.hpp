@@ -5,7 +5,13 @@
 
 namespace Strafe
 {
-	enum HullType { Point, Line, Standing, Crouching, NumValues };
+	const int YAW = 0;
+	const int PITCH = 1;
+	const int ROLL = 2;
+	const int FMOVE_INDEX = 0;
+	const int SMOVE_INDEX = 1;
+	const int UPMOVE_INDEX = 2;
+	enum class HullType { Point, Line, Standing, Crouching, NumValues };
 
 	struct Vector
 	{
@@ -13,17 +19,28 @@ namespace Strafe
 		Vector() = default;
 		float x = 0, y = 0, z = 0;
 		float& operator[](int x);
+		const float& operator[](int x) const;
 		float Length2D() const;
 		float Length() const;
 		float Dot2D(const Vector& rhs) const;
+		float Dot(const Vector& rhs) const;
+		float VectorNormalize();
 		void Scale(float f);
+		void Add(const Vector& rhs);
+		void Subtract(const Vector& rhs);
 	};
+
+	void AngleVectors(const Vector& v, Vector* fwd, Vector* right, Vector* up);
 
     struct PlayerData
 	{
+		Vector m_vecViewAngles;
 		Vector UnduckedOrigin;
-		Vector Velocity;
+		Vector m_vecVelocity;
 		Vector Basevelocity;
+		Vector m_outWishVel;
+		float m_flWaterJumpTime = 0.0f;
+		float m_surfaceFriction = 1.0f;
 		bool Ducking;
 		bool DuckPressed;
 		bool OnGround;
@@ -48,6 +65,8 @@ namespace Strafe
 	const double M_INVU_RAD = 32768 / M_PI;
 	const double M_INVU_DEG = 65536.0 / 360;
 	const double M_U_DEG_HALF = 180.0 / 65536;
+
+	void SinCos(float value, float* sin, float* cos);
 
 	template<typename T, std::size_t size = 3>
 	inline void VecCopy(const T& from, T& to)

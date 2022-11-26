@@ -12,7 +12,7 @@ double Strafe::TargetTheta(const PlayerData &player,
     double gamma1 = vars.EntFriction * vars.Frametime * vars.Maxspeed * accel;
 
     PlayerData copy = player;
-    double lambdaVel = copy.Velocity.Length2D();
+    double lambdaVel = copy.m_vecVelocity.Length2D();
 
     double cosTheta;
 
@@ -54,7 +54,7 @@ double MaxAccelTheta(const PlayerData &player, const MovementVars &vars)
     if (accelspeed <= 0.0)
         return M_PI;
 
-    if (player.Velocity.Length2D() == 0)
+    if (player.m_vecVelocity.Length2D() == 0)
         return 0.0;
 
     double wishspeed_capped = player.OnGround ? wishspeed : vars.WishspeedCap;
@@ -62,7 +62,7 @@ double MaxAccelTheta(const PlayerData &player, const MovementVars &vars)
     if (tmp <= 0.0)
         return M_PI / 2;
 
-    double speed = player.Velocity.Length2D();
+    double speed = player.m_vecVelocity.Length2D();
     if (tmp < speed)
         return std::acos(tmp / speed);
 
@@ -73,7 +73,7 @@ void VectorFME(PlayerData &player, const MovementVars &vars, double theta)
 {
     Vector a(std::cos(theta), std::sin(theta), 0);
     double wishspeed_capped = Wishspeed(player, vars);
-    double tmp = wishspeed_capped - player.Velocity.Dot2D(a);
+    double tmp = wishspeed_capped - player.m_vecVelocity.Dot2D(a);
     if (tmp <= 0.0)
         return;
 
@@ -82,18 +82,18 @@ void VectorFME(PlayerData &player, const MovementVars &vars, double theta)
     if (accelspeed <= tmp)
         tmp = accelspeed;
 
-    player.Velocity.x += static_cast<float>(a.x * tmp);
-    player.Velocity.y += static_cast<float>(a.y * tmp);
+    player.m_vecVelocity.x += static_cast<float>(a.x * tmp);
+    player.m_vecVelocity.y += static_cast<float>(a.y * tmp);
 }
 
-static bool OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input)
+bool Strafe::OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input)
 {
     PlayerData temp = player;
-    temp.Velocity.x = player.Velocity.Length2D();
-    temp.Velocity.y = 0;
+    temp.m_vecVelocity.x = player.m_vecVelocity.Length2D();
+    temp.m_vecVelocity.y = 0;
     VectorFME(temp, vars, M_PI);
 
-    return temp.Velocity.Length2D() > input.CappedLimit;
+    return temp.m_vecVelocity.Length2D() > input.CappedLimit;
 }
 
 static double StrafeCappedTheta(const PlayerData &player, const MovementVars &vars, const StrafeInput &input)
@@ -101,12 +101,12 @@ static double StrafeCappedTheta(const PlayerData &player, const MovementVars &va
     double theta = MaxAccelTheta(player, vars);
 
     PlayerData temp = player;
-    temp.Velocity.x = player.Velocity.Length2D();
-    temp.Velocity.y = 0;
+    temp.m_vecVelocity.x = player.m_vecVelocity.Length2D();
+    temp.m_vecVelocity.y = 0;
 
     VectorFME(temp, vars, theta);
 
-    if (temp.Velocity.Length2D() > input.CappedLimit)
+    if (temp.m_vecVelocity.Length2D() > input.CappedLimit)
     {
         // If we are completely over the cap and can't set our velocity to it
         // just slow down as fast as possible
@@ -126,7 +126,7 @@ static double StrafeCappedTheta(const PlayerData &player, const MovementVars &va
 static double MaxAngleTheta(const PlayerData &player,
                             const MovementVars &vars)
 {
-    double speed = player.Velocity.Length2D();
+    double speed = player.m_vecVelocity.Length2D();
     double accel = Accelerate(player, vars);
     double accelspeed = accel * vars.Maxspeed * vars.EntFriction * vars.Frametime;
 
@@ -171,7 +171,8 @@ double Strafe::StrafeTheta(const PlayerData &player, const MovementVars &vars, c
     {
         if (input.Stype == StrafeType::MaxAccelCapped)
         {
-            return StrafeCappedTheta(player, vars, input);
+            return 0;
+            //return StrafeCappedTheta(player, vars, input);
         }
         else if (input.Stype == StrafeType::MaxAccel)
         {
