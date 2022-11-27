@@ -7,10 +7,10 @@ namespace Strafe
     enum class StrafeType { MaxAccel, MaxAngle, MaxAccelCapped, Direction, NumValues };
     enum class JumpType { None, ABH, Bhop, Glitchless };
 
-    TraceResult TraceDefault(const Vector& start, const Vector& end, HullType hull);
+    TraceResult TraceDefault(const Vector& start, const Vector& end, const PlayerData& data);
     bool TraceGroundDefault(PlayerData& data);
 
-    typedef std::function<TraceResult(const Vector& start, const Vector& end, HullType hull)> TraceFunc;
+    typedef std::function<TraceResult(const Vector& start, const Vector& end, const PlayerData& data)> TraceFunc;
     typedef std::function<bool(PlayerData&)> TraceGround;
 
 	struct StrafeInput
@@ -46,7 +46,7 @@ namespace Strafe
 		float Maxvelocity = 3500;
 		float Gravity = 600;
 		float Stepsize = 20;
-		float Bounce = 1;
+		float Bounce = 0.0f;
 		bool ReduceWishspeed = false;
         TraceFunc traceFunc = TraceDefault;
         TraceGround groundFunc = TraceGroundDefault;
@@ -67,5 +67,4 @@ namespace Strafe
     double StrafeTheta(const PlayerData& player, const MovementVars& vars, const StrafeInput& input);
     void Simulate(PlayerData& player, const MovementVars& vars, const StrafeInput& input);
     bool OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input);
-    
 }

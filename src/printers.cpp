@@ -8,12 +8,6 @@ namespace Strafe
     {
         switch (HullType)
         {
-        case Strafe::HullType::Point:
-            os << "Point";
-            break;
-        case Strafe::HullType::Line:
-            os << "Line";
-            break;
         case Strafe::HullType::Standing:
             os << "Standing";
             break;
@@ -38,7 +32,7 @@ namespace Strafe
     std::ostream &operator<<(std::ostream &os, const PlayerData &v)
     {
         os << "PlayerData(";
-        os << "UnduckedOrigin=" << v.UnduckedOrigin;
+        os << "m_vecAbsOrigin=" << v.m_vecAbsOrigin;
         os << ", m_vecVelocity=" << v.m_vecVelocity;
         os << ", Basevelocity=" << v.Basevelocity;
         os << ", Ducking=" << v.Ducking;

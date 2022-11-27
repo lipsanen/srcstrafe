@@ -19,6 +19,11 @@ float& Vector::operator[](int i)
     }
 }
 
+bool Vector::operator==(const Vector& rhs) const
+{
+    return x == rhs.x && y == rhs.y && z == rhs.z;
+}
+
 const float& Vector::operator[](int i) const
 {
     if(i == 0)
@@ -102,6 +107,11 @@ void Vector::Subtract(const Vector& rhs)
     z -= rhs.z;
 }
 
+void Vector::Zero()
+{
+    x = y = z = 0.0f;
+}
+
 void Strafe::SinCos(float x, float* s, float *c)
 {
     *s = sin(x);
@@ -136,4 +146,64 @@ void Strafe::AngleVectors(const Vector& angles, Vector* forward, Vector* right, 
 		up->y = (cr*sp*sy+-sr*cy);
 		up->z = cr*cp;
 	}
+}
+
+Vector Strafe::VectorMult(const Vector& src, float scale)
+{
+    Vector v = src;
+    v.x *= scale;
+    v.y *= scale;
+    v.z *= scale;
+    return v;
+}
+
+
+void Strafe::VectorMA( const Vector& start, float scale, const Vector& direction, Vector& dest )
+{
+	dest.x = start.x + scale * direction.x;
+	dest.y = start.y + scale * direction.y;
+	dest.z = start.z + scale * direction.z;
+}
+
+int Strafe::ClipVelocity(Vector& in, Vector& normal, Vector& out, float overbounce)
+{
+    float	backoff;
+	float	change;
+	float angle;
+	int		i, blocked;
+	
+	angle = normal[ 2 ];
+
+	blocked = 0x00;         // Assume unblocked.
+	if (angle > 0)			// If the plane that is blocking us has a positive z component, then assume it's a floor.
+		blocked |= 0x01;	// 
+	if (!angle)				// If the plane has no Z, it is vertical (wall/step)
+		blocked |= 0x02;	// 
+	
+
+	// Determine how far along plane to slide based on incoming direction.
+	backoff = DotProduct (in, normal) * overbounce;
+
+	for (i=0 ; i<3 ; i++)
+	{
+		change = normal[i]*backoff;
+		out[i] = in[i] - change; 
+	}
+	
+	// iterate once to make sure we aren't still moving through the plane
+	float adjust = DotProduct( out, normal );
+	if( adjust < 0.0f )
+	{
+        Vector sub = VectorMult(normal, adjust);
+        out.Subtract(sub);
+	}
+
+	// Return blocking flags.
+	return blocked;
+}
+
+
+void Strafe::VectorCopy(Vector& src, Vector& dest)
+{
+    dest = src;   
 }

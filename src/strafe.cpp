@@ -1,31 +1,12 @@
 #include "strafe.hpp"
 #include <cmath>
+#include <cstdio>
 
 using namespace Strafe;
 
-double Strafe::TargetTheta(const PlayerData &player,
-                           const MovementVars &vars,
-                           double target)
+static double Accelerate(const PlayerData &player, const MovementVars &vars)
 {
-    double accel = player.OnGround ? vars.Accelerate : vars.Airaccelerate;
-    double L = vars.WishspeedCap;
-    double gamma1 = vars.EntFriction * vars.Frametime * vars.Maxspeed * accel;
-
-    PlayerData copy = player;
-    double lambdaVel = copy.m_vecVelocity.Length2D();
-
-    double cosTheta;
-
-    if (gamma1 <= 2 * L)
-    {
-        cosTheta = ((target * target - lambdaVel * lambdaVel) / gamma1 - gamma1) / (2 * lambdaVel);
-        return std::acos(cosTheta);
-    }
-    else
-    {
-        cosTheta = std::sqrt((target * target - L * L) / lambdaVel * lambdaVel);
-        return std::acos(cosTheta);
-    }
+    return player.OnGround ? vars.Accelerate : vars.Airaccelerate;
 }
 
 static double Wishspeed(const PlayerData &player, const MovementVars &vars)
@@ -40,9 +21,51 @@ static double Wishspeed(const PlayerData &player, const MovementVars &vars)
     }
 }
 
-static double Accelerate(const PlayerData &player, const MovementVars &vars)
+double Strafe::TargetTheta(const PlayerData &player,
+                           const MovementVars &vars,
+                           double targetVel)
 {
-    return player.OnGround ? vars.Accelerate : vars.Airaccelerate;
+#if 0
+double accel = player.OnGround ? vars.Accelerate : vars.Airaccelerate;
+double L = vars.WishspeedCap;
+double gamma1 = vars.EntFriction * vars.Frametime * vars.Maxspeed * accel;
+
+PlayerData copy = player;
+double lambdaVel = copy.m_vecVelocity.Length2D();
+
+double cosTheta;
+
+if (gamma1 <= 2 * L)
+{
+    cosTheta = ((targetVel * targetVel - lambdaVel * lambdaVel) / gamma1 - gamma1) / (2 * lambdaVel);
+    return std::acos(cosTheta);
+}
+else
+{
+    cosTheta = std::sqrt((targetVel * targetVel - L * L) / lambdaVel * lambdaVel);
+    return std::acos(cosTheta);
+}
+#else
+    double A = Accelerate(player, vars) * vars.Maxspeed * vars.Frametime * player.m_surfaceFriction;
+    double A2 = std::pow(A, 2);
+    double v0 = player.m_vecVelocity.Length2D();
+    double v02 = std::pow(v0, 2);
+    double solution1 = (-A2 - v02 + std::pow(targetVel, 2)) / (2 * A * v0);
+    double solution2 = (A2 + v02 - std::pow(targetVel, 2)) / (2 * A * v0);
+
+    if(solution1 >= -1 && solution1 <= 1)
+    {
+        return std::acos(solution1);
+    }
+    else if(solution2 >= -1 && solution2 <= 1)
+    {
+        return std::acos(solution2);
+    }
+    else
+    {
+        abort(); // lol
+    }
+#endif
 }
 
 double MaxAccelTheta(const PlayerData &player, const MovementVars &vars)
@@ -50,7 +73,7 @@ double MaxAccelTheta(const PlayerData &player, const MovementVars &vars)
     double accel = player.OnGround ? vars.Accelerate : vars.Airaccelerate;
     double wishspeed = Wishspeed(player, vars);
 
-    double accelspeed = accel * vars.Maxspeed * vars.EntFriction * vars.Frametime;
+    double accelspeed = accel * vars.Maxspeed * vars.Frametime * player.m_surfaceFriction;
     if (accelspeed <= 0.0)
         return M_PI;
 
@@ -77,13 +100,13 @@ void VectorFME(PlayerData &player, const MovementVars &vars, double theta)
     if (tmp <= 0.0)
         return;
 
-    double accel = player.OnGround ? vars.Accelerate : vars.Airaccelerate;
-    double accelspeed = accel * vars.Maxspeed * vars.EntFriction * vars.Frametime;
+    double accel = Accelerate(player, vars);
+    double accelspeed = accel * vars.Maxspeed * vars.Frametime * player.m_surfaceFriction;
     if (accelspeed <= tmp)
         tmp = accelspeed;
 
-    player.m_vecVelocity.x += static_cast<float>(a.x * tmp);
-    player.m_vecVelocity.y += static_cast<float>(a.y * tmp);
+    player.m_vecVelocity.x += static_cast<float>(a.x * accelspeed);
+    player.m_vecVelocity.y += static_cast<float>(a.y * accelspeed);
 }
 
 bool Strafe::OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input)
@@ -92,8 +115,9 @@ bool Strafe::OvershotCap(const PlayerData &player, const MovementVars &vars, con
     temp.m_vecVelocity.x = player.m_vecVelocity.Length2D();
     temp.m_vecVelocity.y = 0;
     VectorFME(temp, vars, M_PI);
+    float vel2d = temp.m_vecVelocity.Length2D();
 
-    return temp.m_vecVelocity.Length2D() > input.CappedLimit;
+    return vel2d > input.CappedLimit;
 }
 
 static double StrafeCappedTheta(const PlayerData &player, const MovementVars &vars, const StrafeInput &input)
@@ -105,8 +129,9 @@ static double StrafeCappedTheta(const PlayerData &player, const MovementVars &va
     temp.m_vecVelocity.y = 0;
 
     VectorFME(temp, vars, theta);
+    float vel2d = temp.m_vecVelocity.Length2D();
 
-    if (temp.m_vecVelocity.Length2D() > input.CappedLimit)
+    if (vel2d > input.CappedLimit)
     {
         // If we are completely over the cap and can't set our velocity to it
         // just slow down as fast as possible
@@ -128,7 +153,7 @@ static double MaxAngleTheta(const PlayerData &player,
 {
     double speed = player.m_vecVelocity.Length2D();
     double accel = Accelerate(player, vars);
-    double accelspeed = accel * vars.Maxspeed * vars.EntFriction * vars.Frametime;
+    double accelspeed = accel * vars.Maxspeed * vars.Frametime * player.m_surfaceFriction;
 
     if (accelspeed <= 0.0)
     {
@@ -171,8 +196,7 @@ double Strafe::StrafeTheta(const PlayerData &player, const MovementVars &vars, c
     {
         if (input.Stype == StrafeType::MaxAccelCapped)
         {
-            return 0;
-            //return StrafeCappedTheta(player, vars, input);
+            return StrafeCappedTheta(player, vars, input);
         }
         else if (input.Stype == StrafeType::MaxAccel)
         {
@@ -191,7 +215,7 @@ double Strafe::StrafeTheta(const PlayerData &player, const MovementVars &vars, c
     return 0;
 }
 
-TraceResult Strafe::TraceDefault(const Vector &start, const Vector &end, HullType hull)
+TraceResult Strafe::TraceDefault(const Vector &start, const Vector &end, const PlayerData& data)
 {
     TraceResult result;
     result.AllSolid = false;

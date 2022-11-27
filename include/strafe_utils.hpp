@@ -11,7 +11,8 @@ namespace Strafe
 	const int FMOVE_INDEX = 0;
 	const int SMOVE_INDEX = 1;
 	const int UPMOVE_INDEX = 2;
-	enum class HullType { Point, Line, Standing, Crouching, NumValues };
+	enum class HullType { Standing, Crouching, NumValues };
+	enum class MoveType { Walk };
 
 	struct Vector
 	{
@@ -19,6 +20,7 @@ namespace Strafe
 		Vector() = default;
 		float x = 0, y = 0, z = 0;
 		float& operator[](int x);
+		bool operator==(const Vector& rhs) const;
 		const float& operator[](int x) const;
 		float Length2D() const;
 		float Length() const;
@@ -28,17 +30,24 @@ namespace Strafe
 		void Scale(float f);
 		void Add(const Vector& rhs);
 		void Subtract(const Vector& rhs);
+		void Zero();
 	};
 
 	void AngleVectors(const Vector& v, Vector* fwd, Vector* right, Vector* up);
+	int ClipVelocity(Vector& in, Vector& normal, Vector& out, float overbounce);
+	void VectorScale(Vector& src, float scale, Vector& dest);
+	void VectorMA( const Vector& start, float scale, const Vector& direction, Vector& dest );
+	Vector VectorMult(const Vector& src, float scale);
+	void VectorCopy(Vector& src, Vector& dest);
 
     struct PlayerData
 	{
 		Vector m_vecViewAngles;
-		Vector UnduckedOrigin;
+		Vector m_vecAbsOrigin;
 		Vector m_vecVelocity;
 		Vector Basevelocity;
 		Vector m_outWishVel;
+		MoveType m_moveType = MoveType::Walk;
 		float m_flWaterJumpTime = 0.0f;
 		float m_surfaceFriction = 1.0f;
 		bool Ducking;
@@ -53,6 +62,7 @@ namespace Strafe
 		bool StartSolid;
 		float Fraction;
 		Vector EndPos;
+		Vector Plane;
 	};
 
 #ifndef M_PI

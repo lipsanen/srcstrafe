@@ -74,7 +74,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   TRY_READ_FLOAT(vars.Maxspeed, 100, 1000);
   
   Strafe::StrafeInput input;
-  input.CappedLimit = 299.99;
+  TRY_READ_FLOAT(input.CappedLimit, 0.01, 3500);
   input.Strafe = true;
   TRY_READ_ENUM(input.Stype, Strafe::StrafeType::NumValues);
 
