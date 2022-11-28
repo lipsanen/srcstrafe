@@ -37,6 +37,7 @@ namespace Strafe
 		float VectorialOffset = 0.0f;
 		float AngleSpeed = 0.0f;
 		float Scale = 1.0f;
+		float MaxAngleEps = 1e-4f;
 		bool AFH = true;
 		bool Vectorial = true;
 		bool JumpOverride = true;

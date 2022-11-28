@@ -199,7 +199,7 @@ static double StrafeCappedTheta(const PlayerData &player, const MovementVars &va
 }
 
 static double MaxAngleTheta(const PlayerData &player,
-                            const MovementVars &vars)
+                            const MovementVars &vars, const StrafeInput& input)
 {
     double speed = player.m_vecVelocity.Length2D();
     double accel = Accelerate(player, vars);
@@ -215,8 +215,8 @@ static double MaxAngleTheta(const PlayerData &player,
                 return 0.0;
             else
             {
-                //safeguard_yaw = true;
-                return std::acos(wishspeed_capped / speed); // The actual angle needs to be _less_ than this.
+                double theta = std::acos(wishspeed_capped / speed); // The actual angle needs to be greater than this.
+                return theta + input.MaxAngleEps;  
             }
         }
         else
@@ -225,9 +225,8 @@ static double MaxAngleTheta(const PlayerData &player,
                 return std::acos(accelspeed / speed);
             else
             {
-                //safeguard_yaw = (wishspeed_capped <= accelspeed);
-                return std::acos(
-                    std::min(accelspeed, wishspeed_capped) / speed); // The actual angle needs to be _less_ than this if wishspeed_capped <= accelspeed.
+                double theta = std::acos(std::min(accelspeed, wishspeed_capped) / speed); // The actual angle needs to be greater than this
+                return theta + input.MaxAngleEps; 
             }
         }
     }
@@ -258,7 +257,7 @@ double Strafe::StrafeTheta(const PlayerData &player, const MovementVars &vars, c
         }
         else if (input.Stype == StrafeType::MaxAngle)
         {
-            return MaxAngleTheta(player, vars);
+            return MaxAngleTheta(player, vars, input);
         }
     }
 

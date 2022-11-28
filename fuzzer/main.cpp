@@ -81,7 +81,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   double value = Strafe::StrafeTheta(pl, vars, input);
 
   bool error = false;
-  const double EPS = 1e-3;
+  const double EPS = 1e-2;
 
   if(std::isnan(value) || !std::isfinite(value) || value > M_PI || value < 0)
   {
