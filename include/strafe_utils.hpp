@@ -50,10 +50,10 @@ namespace Strafe
 		MoveType m_moveType = MoveType::Walk;
 		float m_flWaterJumpTime = 0.0f;
 		float m_surfaceFriction = 1.0f;
-		bool Ducking;
-		bool DuckPressed;
-		bool OnGround;
-		bool CantJump;
+		bool Ducking = false;
+		bool DuckPressed = false;
+		bool OnGround = false;
+		bool CantJump = false;
 	};
 
 	struct TraceResult

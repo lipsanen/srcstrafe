@@ -4,22 +4,35 @@
 
 namespace Strafe
 {
-    enum class StrafeType { MaxAccel, MaxAngle, MaxAccelCapped, Direction, NumValues };
-    enum class JumpType { None, ABH, Bhop, Glitchless };
+	enum class StrafeType
+	{
+		MaxAccel,
+		MaxAngle,
+		MaxAccelCapped,
+		Direction,
+		NumValues
+	};
+	enum class JumpType
+	{
+		None,
+		ABH,
+		Bhop,
+		Glitchless
+	};
 
-    TraceResult TraceDefault(const Vector& start, const Vector& end, const PlayerData& data);
-    bool TraceGroundDefault(PlayerData& data);
+	TraceResult TraceDefault(const Vector &start, const Vector &end, const PlayerData &data);
+	bool TraceGroundDefault(PlayerData &data);
 
-    typedef std::function<TraceResult(const Vector& start, const Vector& end, const PlayerData& data)> TraceFunc;
-    typedef std::function<bool(PlayerData&)> TraceGround;
+	typedef std::function<TraceResult(const Vector &start, const Vector &end, const PlayerData &data)> TraceFunc;
+	typedef std::function<bool(PlayerData &)> TraceGround;
 
 	struct StrafeInput
 	{
-        float Sidemove = 0.0f;
-        float Forwardmove = 0.0f;
-        StrafeType Stype = StrafeType::MaxAccel;
-        JumpType Jtype = JumpType::ABH;
-        float CappedLimit = 0.0f;
+		float Sidemove = 0.0f;
+		float Forwardmove = 0.0f;
+		StrafeType Stype = StrafeType::MaxAccel;
+		JumpType Jtype = JumpType::ABH;
+		float CappedLimit = 0.0f;
 		double TargetYaw = 0.0;
 		float VectorialOffset = 0.0f;
 		float AngleSpeed = 0.0f;
@@ -48,23 +61,26 @@ namespace Strafe
 		float Stepsize = 20;
 		float Bounce = 0.0f;
 		bool ReduceWishspeed = false;
-        TraceFunc traceFunc = TraceDefault;
-        TraceGround groundFunc = TraceGroundDefault;
+		TraceFunc traceFunc = TraceDefault;
+		TraceGround groundFunc = TraceGroundDefault;
 	};
 
-    struct StrafeOutput
-    {
-        bool Success = false;
-        const char* Error = nullptr;
-        Vector Move;
-        bool Jump = false;
-    };
+	struct StrafeOutput
+	{
+		bool Success = false;
+		const char *Error = nullptr;
+		Vector Move;
+		bool Jump = false;
+	};
 
-    double TargetTheta(const PlayerData& player,
-                    const MovementVars& vars,
-                    double target);
-    StrafeOutput Strafe(const PlayerData& player, const MovementVars& vars, const StrafeInput& input);
-    double StrafeTheta(const PlayerData& player, const MovementVars& vars, const StrafeInput& input);
-    void Simulate(PlayerData& player, const MovementVars& vars, const StrafeInput& input);
-    bool OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input);
+	double TargetTheta(const PlayerData &player,
+					   const MovementVars &vars,
+					   double target, bool forceIterative = false);
+	StrafeOutput Strafe(const PlayerData &player, const MovementVars &vars, const StrafeInput &input);
+	double StrafeTheta(const PlayerData &player, const MovementVars &vars, const StrafeInput &input);
+	void Simulate(PlayerData &player, const MovementVars &vars, const StrafeInput &input);
+	bool OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input);
+	void VectorFME(PlayerData &player, const MovementVars &vars, double theta);
+	double GetNewSpeed(const PlayerData &player, const MovementVars &vars, double theta);
+	double GetDotWithOld(const PlayerData &player, const MovementVars &vars, double theta);
 }

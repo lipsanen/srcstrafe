@@ -276,19 +276,6 @@ static int TryPlayerMove(PlayerData &mv, const MovementVars &vars, Vector *pFirs
 		mv.m_vecVelocity.Zero();
 	}
 
-	// Check if they slammed into a wall
-	float fSlamVol = 0.0f;
-
-	float fLateralStoppingAmount = primal_velocity.Length2D() - mv.m_vecVelocity.Length2D();
-	if (fLateralStoppingAmount > PLAYER_MAX_SAFE_FALL_SPEED * 2.0f)
-	{
-		fSlamVol = 1.0f;
-	}
-	else if (fLateralStoppingAmount > PLAYER_MAX_SAFE_FALL_SPEED)
-	{
-		fSlamVol = 0.85f;
-	}
-
 	return blocked;
 }
 

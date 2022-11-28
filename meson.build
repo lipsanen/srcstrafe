@@ -19,4 +19,5 @@ if get_option('fuzz')
 else
     subdir('test')
     subdir('bench')
+    subdir('tools')
 endif

@@ -80,7 +80,53 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   double value = Strafe::StrafeTheta(pl, vars, input);
 
+  bool error = false;
+  const double EPS = 1e-3;
+
   if(std::isnan(value) || !std::isfinite(value) || value > M_PI || value < 0)
+  {
+    error = true;
+  }
+  else if(input.Stype == Strafe::StrafeType::MaxAccelCapped)
+  {
+    // We are minimizing distance to a vel
+    double prevDelta = std::abs(Strafe::GetNewSpeed(pl, vars, value - 0.001) - input.CappedLimit);
+    double delta = std::abs(Strafe::GetNewSpeed(pl, vars, value) - input.CappedLimit);
+    double nextDelta = std::abs(Strafe::GetNewSpeed(pl, vars, value + 0.001) - input.CappedLimit);
+
+    if(prevDelta < delta - EPS || nextDelta < delta - EPS)
+    {
+      error = true;
+    }
+  }
+  else if(input.Stype == Strafe::StrafeType::MaxAccel)
+  {
+    // Maximizing vel
+    double prevSpeed = Strafe::GetNewSpeed(pl, vars, value - 0.001);
+    double speed = Strafe::GetNewSpeed(pl, vars, value);
+    double nextSpeed = Strafe::GetNewSpeed(pl, vars, value + 0.001);
+
+
+    if(prevSpeed > speed + EPS || nextSpeed > speed + EPS)
+    {
+      error = true;
+    }
+  }
+  else if(input.Stype == Strafe::StrafeType::MaxAngle)
+  {
+    // Maximizing angle change == minimizing dot between the direction vectors
+    double prevDot = Strafe::GetDotWithOld(pl, vars, value - 0.001);
+    double dot = Strafe::GetDotWithOld(pl, vars, value);
+    double nextDot = Strafe::GetDotWithOld(pl, vars, value + 0.001);
+
+    if(prevDot < dot - EPS || nextDot < dot - EPS)
+    {
+      error = true;
+    }
+
+  }
+
+  if(error)
   {
     printAndAbort(pl, vars, input, value);
   }

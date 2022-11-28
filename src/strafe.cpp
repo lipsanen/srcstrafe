@@ -21,31 +21,50 @@ static double Wishspeed(const PlayerData &player, const MovementVars &vars)
     }
 }
 
+static double GetTargetThetaIt(const PlayerData &player,
+                           const MovementVars &vars,
+                           float targetVel)
+{
+    PlayerData data = player;
+    float startVel = player.m_vecVelocity.Length2D();
+
+    double low = M_PI / 2;
+    double high = M_PI;
+    const int max_iterations = 64; // in practice max appears to be ~24, this is just a safeguard
+    int i;
+
+    for(i=0; i < max_iterations && std::nextafterf(low, low + 1) < high; ++i)
+    {
+        double mid = (low + high) / 2;
+        data.m_vecVelocity.Zero();
+        data.m_vecVelocity.x = startVel;
+        VectorFME(data, vars, mid);
+        float newVel = data.m_vecVelocity.Length2D();
+        if(newVel == targetVel)
+        {
+            low = high = mid;
+        }
+        else if(newVel > targetVel)
+        {
+            low = mid;
+        }
+        else
+        {
+            high = mid;
+        }
+    }
+
+    if(i == max_iterations)
+        abort();
+
+    return low;
+}
+
 double Strafe::TargetTheta(const PlayerData &player,
                            const MovementVars &vars,
-                           double targetVel)
+                           double targetVel, 
+                           bool forceIterative)
 {
-#if 0
-double accel = player.OnGround ? vars.Accelerate : vars.Airaccelerate;
-double L = vars.WishspeedCap;
-double gamma1 = vars.EntFriction * vars.Frametime * vars.Maxspeed * accel;
-
-PlayerData copy = player;
-double lambdaVel = copy.m_vecVelocity.Length2D();
-
-double cosTheta;
-
-if (gamma1 <= 2 * L)
-{
-    cosTheta = ((targetVel * targetVel - lambdaVel * lambdaVel) / gamma1 - gamma1) / (2 * lambdaVel);
-    return std::acos(cosTheta);
-}
-else
-{
-    cosTheta = std::sqrt((targetVel * targetVel - L * L) / lambdaVel * lambdaVel);
-    return std::acos(cosTheta);
-}
-#else
     double A = Accelerate(player, vars) * vars.Maxspeed * vars.Frametime * player.m_surfaceFriction;
     double A2 = std::pow(A, 2);
     double v0 = player.m_vecVelocity.Length2D();
@@ -53,25 +72,26 @@ else
     double solution1 = (-A2 - v02 + std::pow(targetVel, 2)) / (2 * A * v0);
     double solution2 = (A2 + v02 - std::pow(targetVel, 2)) / (2 * A * v0);
 
-    if(solution1 >= -1 && solution1 <= 1)
+    if(!forceIterative && solution1 >= -1 && solution1 <= 1)
     {
+        // accelspeed case: Solution ends up being quite neat
         return std::acos(solution1);
     }
-    else if(solution2 >= -1 && solution2 <= 1)
+    else if(!forceIterative && solution2 >= -1 && solution2 <= 1)
     {
+        // Don't think this branch is ever taken, probably a negative accel case
         return std::acos(solution2);
     }
     else
     {
-        abort(); // lol
+        // addspeed case: the explicit solution is nightmarish, use iterative solution instead
+        return GetTargetThetaIt(player, vars, targetVel);
     }
-#endif
 }
 
 double MaxAccelTheta(const PlayerData &player, const MovementVars &vars)
 {
     double accel = player.OnGround ? vars.Accelerate : vars.Airaccelerate;
-    double wishspeed = Wishspeed(player, vars);
 
     double accelspeed = accel * vars.Maxspeed * vars.Frametime * player.m_surfaceFriction;
     if (accelspeed <= 0.0)
@@ -80,7 +100,7 @@ double MaxAccelTheta(const PlayerData &player, const MovementVars &vars)
     if (player.m_vecVelocity.Length2D() == 0)
         return 0.0;
 
-    double wishspeed_capped = player.OnGround ? wishspeed : vars.WishspeedCap;
+    double wishspeed_capped = Wishspeed(player, vars);
     double tmp = wishspeed_capped - accelspeed;
     if (tmp <= 0.0)
         return M_PI / 2;
@@ -92,7 +112,7 @@ double MaxAccelTheta(const PlayerData &player, const MovementVars &vars)
     return 0.0;
 }
 
-void VectorFME(PlayerData &player, const MovementVars &vars, double theta)
+void Strafe::VectorFME(PlayerData &player, const MovementVars &vars, double theta)
 {
     Vector a(std::cos(theta), std::sin(theta), 0);
     double wishspeed_capped = Wishspeed(player, vars);
@@ -102,11 +122,39 @@ void VectorFME(PlayerData &player, const MovementVars &vars, double theta)
 
     double accel = Accelerate(player, vars);
     double accelspeed = accel * vars.Maxspeed * vars.Frametime * player.m_surfaceFriction;
-    if (accelspeed <= tmp)
-        tmp = accelspeed;
+    if (accelspeed >= tmp)
+        accelspeed = tmp;
 
     player.m_vecVelocity.x += static_cast<float>(a.x * accelspeed);
     player.m_vecVelocity.y += static_cast<float>(a.y * accelspeed);
+}
+
+
+double Strafe::GetNewSpeed(const PlayerData& player, const MovementVars &vars, double theta)
+{
+    PlayerData data = player;
+    data.m_vecVelocity.x = data.m_vecVelocity.Length2D();
+    data.m_vecVelocity.y = data.m_vecVelocity.z = 0;
+    VectorFME(data, vars, theta);
+
+    return data.m_vecVelocity.Length2D();
+}
+
+double Strafe::GetDotWithOld(const PlayerData& player, const MovementVars &vars, double theta)
+{
+    PlayerData data = player;
+    data.m_vecVelocity.x = data.m_vecVelocity.Length2D();
+    data.m_vecVelocity.y = data.m_vecVelocity.z = 0;
+
+    Vector oldDir = data.m_vecVelocity;
+    oldDir.VectorNormalize();
+
+    VectorFME(data, vars, theta);
+
+    Vector newDir = data.m_vecVelocity;
+    newDir.VectorNormalize();
+
+    return newDir.Dot2D(oldDir);
 }
 
 bool Strafe::OvershotCap(const PlayerData &player, const MovementVars &vars, const StrafeInput &input)
@@ -141,7 +189,9 @@ static double StrafeCappedTheta(const PlayerData &player, const MovementVars &va
         }
         else
         {
-            theta = TargetTheta(player, vars, input.CappedLimit);
+            // If we have max accel theta == pi / 2, it means the answer may be in the addspeed zone
+            bool forceIterative = (theta == M_PI / 2);
+            theta = TargetTheta(player, vars, input.CappedLimit, forceIterative);
         }
     }
 
