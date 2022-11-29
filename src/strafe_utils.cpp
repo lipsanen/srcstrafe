@@ -3,6 +3,8 @@
 
 using namespace Strafe;
 
+Strafe::Vector vec3_origin;
+
 float& Vector::operator[](int i)
 {
     if(i == 0)
@@ -203,7 +205,65 @@ int Strafe::ClipVelocity(Vector& in, Vector& normal, Vector& out, float overboun
 }
 
 
-void Strafe::VectorCopy(Vector& src, Vector& dest)
+float Strafe::VectorNormalize(Vector& v)
+{
+    return v.VectorNormalize();
+}
+
+float Strafe::VectorLength(const Vector& v)
+{
+    return v.Length();
+}
+
+void Strafe::VectorCopy(const Vector& src, Vector& dest)
 {
     dest = src;   
+}
+
+void Vector::Init(float x, float y, float z)
+{
+    this->x = x;
+    this->y = y;
+    this->z = z;
+}
+
+float Vector::LengthSqr() const
+{
+    return this->Dot(*this);
+}
+
+Vector Vector::operator+(const Vector& rhs)
+{
+    return Vector(x + rhs.x, y + rhs.y, z + rhs.z);
+}
+
+Vector& Vector::operator+=(const Vector& rhs)
+{
+    return *this = *this + rhs;
+}
+
+Vector Vector::operator-(const Vector& rhs)
+{
+    return Vector(x - rhs.x, y - rhs.y, z - rhs.z);
+}
+
+Vector& Vector::operator-=(const Vector& rhs)
+{
+    return *this = *this - rhs;
+}
+
+Vector Vector::operator*(float rhs)
+{
+    return VectorMult(*this, rhs);
+}
+
+Vector& Vector::operator*=(float rhs)
+{
+    return *this = *this * rhs;
+}
+
+
+Vector Vector::operator-() const
+{
+    return Vector(-x, -y, -z);
 }

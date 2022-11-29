@@ -6,12 +6,14 @@ using namespace Strafe;
 static const float PLAYER_MAX_SAFE_FALL_SPEED = 580.0f;
 static constexpr int MAX_CLIP_PLANES = 5;
 
-static void Friction(PlayerData &player, const MovementVars &vars)
+static int TryPlayerMove(PlayerData &mv, const MovementVars &vars, Vector *pFirstDest = NULL, TraceResult *pFirstTrace = NULL);
+
+static void Friction(PlayerData& mv, const MovementVars &vars)
 {
-	if (!player.OnGround)
+	if (!mv.OnGround)
 		return;
 
-	float speed = player.m_vecVelocity.Length2D();
+	float speed = mv.m_vecVelocity.Length2D();
 	if (speed < 0.1f)
 		return;
 
@@ -21,15 +23,190 @@ static void Friction(PlayerData &player, const MovementVars &vars)
 	float newspeed = std::max(speed - drop, 0.f);
 	if (newspeed != speed)
 	{
-		player.m_vecVelocity.Scale(newspeed);
+		mv.m_vecVelocity.Scale(newspeed);
 	}
 }
 
-static void WalkMove(PlayerData &player, const MovementVars &vars, const StrafeOutput &output)
+static void StartGravity(PlayerData& mv, const MovementVars& vars)
+{
+	float ent_gravity = 1.0;
+
+	// Add gravity so they'll be in the correct position during movement
+	// yes, this 0.5 looks wrong, but it's not.  
+	mv.m_vecVelocity[2] -= (ent_gravity * vars.Gravity * 0.5 * vars.Frametime );
+	mv.m_vecVelocity[2] += mv.Basevelocity[2] * vars.Frametime;
+
+	Vector temp = mv.Basevelocity;
+	temp[ 2 ] = 0;
+	mv.Basevelocity = temp;
+
+	CheckVelocity(mv, vars);
+}
+
+static void WaterJump(PlayerData& mv, const MovementVars &vars)
+{
+	if (mv.m_flWaterJumpTime > 10000)
+		mv.m_flWaterJumpTime = 10000;
+
+	if (!mv.m_flWaterJumpTime)
+		return;
+
+	mv.m_flWaterJumpTime -= 1000.0f * vars.Frametime;
+
+	if (mv.m_flWaterJumpTime <= 0 || mv.m_waterLevel == WaterLevel::WL_NotInWater)
+	{
+		mv.m_flWaterJumpTime = 0;
+		mv.m_nFlags &= ~FL_WATERJUMP;
+	}
+	
+	mv.m_vecVelocity[0] = mv.m_vecWaterJumpVel[0];
+	mv.m_vecVelocity[1] = mv.m_vecWaterJumpVel[1];
+}
+
+static bool CheckWater(PlayerData& mv, const MovementVars &vars)
+{
+	return false; // TODO: Fix
+}
+
+static void CheckWaterJump(PlayerData& mv, const MovementVars &vars)
 {
 }
 
-static void AirAccelerate(PlayerData &mv, const MovementVars &vars, const Vector &wishdir, float wishspeed)
+static void CheckJumpButton(PlayerData& mv, const MovementVars& vars)
+{
+
+}
+
+static void WaterMove(PlayerData& mv, const MovementVars& vars)
+{
+
+}
+
+static void CategorizePosition(PlayerData& mv, const MovementVars& vars)
+{
+
+}
+
+static void CheckVelocity(PlayerData& mv, const MovementVars& vars)
+{
+
+}
+
+static void FinishGravity(PlayerData& mv, const MovementVars& vars)
+{
+
+}
+
+static void CheckFalling(PlayerData& mv, const MovementVars& vars)
+{
+
+	if(mv.m_flWaterJumpTime)
+		return;
+
+	float ent_gravity = 1.0f;
+
+	mv.m_vecVelocity[2] -= (ent_gravity * vars.Gravity * vars.Frametime * 0.5);
+	CheckVelocity(mv, vars);
+}
+
+static void StepMove(PlayerData &mv, const MovementVars &vars, const Vector& dest, TraceResult& trace)
+{
+	Vector vecEndPos;
+	VectorCopy( dest, vecEndPos );
+
+	// Try sliding forward both on ground and up 16 pixels
+	//  take the move that goes farthest
+	Vector vecPos, vecVel;
+	VectorCopy( mv.m_vecAbsOrigin, vecPos );
+	VectorCopy( mv.m_vecVelocity, vecVel );
+
+	// Slide move down.
+	TryPlayerMove( mv, vars, &vecEndPos, &trace );
+	
+	// Down results.
+	Vector vecDownPos, vecDownVel;
+	VectorCopy( mv.m_vecAbsOrigin, vecDownPos );
+	VectorCopy( mv.m_vecVelocity, vecDownVel );
+	
+	// Reset original values.
+	mv.m_vecAbsOrigin = vecPos;
+	VectorCopy( vecVel, mv.m_vecVelocity );
+	
+	// Move up a stair height.
+	VectorCopy( mv.m_vecAbsOrigin, vecEndPos );
+	if ( vars.m_bAllowAutoMovement )
+	{
+		vecEndPos.z += vars.Stepsize + vars.DIST_EPSILON;
+	}
+	
+	trace = vars.traceFunc(mv.m_vecAbsOrigin, vecEndPos, mv);
+	if ( !trace.StartSolid && !trace.AllSolid )
+	{
+		mv.m_vecAbsOrigin = trace.EndPos;
+	}
+	
+	// Slide move up.
+	TryPlayerMove(mv, vars);
+	
+	// Move down a stair (attempt to).
+	VectorCopy( mv.m_vecAbsOrigin, vecEndPos );
+	if ( vars.m_bAllowAutoMovement )
+	{
+		vecEndPos.z -= vars.Stepsize + vars.DIST_EPSILON;
+	}
+		
+	trace = vars.traceFunc(mv.m_vecAbsOrigin, vecEndPos, mv);
+	
+	// If we are not on the ground any more then use the original movement attempt.
+	if ( trace.Plane[2] < 0.7 )
+	{
+		mv.m_vecAbsOrigin = vecDownPos;
+		VectorCopy( vecDownVel, mv.m_vecVelocity );
+		float flStepDist = mv.m_vecAbsOrigin.z - vecPos.z;
+		if ( flStepDist > 0.0f )
+		{
+			mv.m_outStepHeight += flStepDist;
+		}
+		return;
+	}
+	
+	// If the trace ended up in empty space, copy the end over to the origin.
+	if ( !trace.StartSolid && !trace.AllSolid )
+	{
+		mv.m_vecAbsOrigin = trace.EndPos;
+	}
+	
+	// Copy this origin to up.
+	Vector vecUpPos;
+	VectorCopy( mv.m_vecAbsOrigin, vecUpPos );
+	
+	// decide which one went farther
+	float flDownDist = ( vecDownPos.x - vecPos.x ) * ( vecDownPos.x - vecPos.x ) + ( vecDownPos.y - vecPos.y ) * ( vecDownPos.y - vecPos.y );
+	float flUpDist = ( vecUpPos.x - vecPos.x ) * ( vecUpPos.x - vecPos.x ) + ( vecUpPos.y - vecPos.y ) * ( vecUpPos.y - vecPos.y );
+	if ( flDownDist > flUpDist )
+	{
+		mv.m_vecAbsOrigin = vecDownPos;
+		VectorCopy( vecDownVel, mv.m_vecVelocity );
+	}
+	else 
+	{
+		// copy z value from slide move
+		mv.m_vecVelocity.z = vecDownVel.z;
+	}
+	
+	float flStepDist = mv.m_vecAbsOrigin.z - vecPos.z;
+	if ( flStepDist > 0 )
+	{
+		mv.m_outStepHeight += flStepDist;
+	}
+}
+
+static void StayOnGround(PlayerData& mv, const MovementVars& vars)
+{
+
+}
+
+static void Accelerate(PlayerData &mv, const MovementVars &vars, const Vector &wishdir, float wishspeed)
 {
 	int i;
 	float addspeed, accelspeed, currentspeed;
@@ -39,10 +216,6 @@ static void AirAccelerate(PlayerData &mv, const MovementVars &vars, const Vector
 
 	if (mv.m_flWaterJumpTime > 0.0f)
 		return;
-
-	// Cap speed
-	if (wishspd > 30)
-		wishspd = 30;
 
 	// Determine veer amount
 	currentspeed = mv.m_vecVelocity.Dot(wishdir);
@@ -66,6 +239,155 @@ static void AirAccelerate(PlayerData &mv, const MovementVars &vars, const Vector
 	{
 		mv.m_vecVelocity[i] += accelspeed * wishdir[i];
 		mv.m_outWishVel[i] += accelspeed * wishdir[i];
+	}
+}
+
+static void AirAccelerate(PlayerData &mv, const MovementVars &vars, const Vector &wishdir, float wishspeed)
+{
+	int i;
+	float addspeed, accelspeed, currentspeed;
+	float wishspd;
+
+	wishspd = wishspeed;
+
+	if (mv.m_flWaterJumpTime > 0.0f)
+		return;
+
+	// Cap speed
+	if (wishspd > vars.WishspeedCap)
+		wishspd = vars.WishspeedCap;
+
+	// Determine veer amount
+	currentspeed = mv.m_vecVelocity.Dot(wishdir);
+
+	// See how much to add
+	addspeed = wishspd - currentspeed;
+
+	// If not adding any, done.
+	if (addspeed <= 0)
+		return;
+
+	// Determine acceleration speed after acceleration
+	accelspeed = vars.Airaccelerate * wishspeed * vars.Frametime * mv.m_surfaceFriction;
+
+	// Cap it
+	if (accelspeed > addspeed)
+		accelspeed = addspeed;
+
+	// Adjust pmove vel.
+	for (i = 0; i < 3; i++)
+	{
+		mv.m_vecVelocity[i] += accelspeed * wishdir[i];
+		mv.m_outWishVel[i] += accelspeed * wishdir[i];
+	}
+}
+
+static void FullWalkMove(PlayerData &mv, const MovementVars &vars, const StrafeOutput& output)
+{
+	if ( !CheckWater(mv, vars) ) 
+	{
+		StartGravity(mv, vars);
+	}
+
+	// If we are leaping out of the water, just update the counters.
+	if (mv.m_flWaterJumpTime)
+	{
+		WaterJump(mv, vars);
+		TryPlayerMove(mv, vars);
+		// See if we are still in water?
+		CheckWater(mv, vars);
+		return;
+	}
+
+	// If we are swimming in the water, see if we are nudging against a place we can jump up out
+	//  of, and, if so, start out jump.  Otherwise, if we are not moving up, then reset jump timer to 0
+	if ( mv.m_waterLevel >= WaterLevel::WL_Waist ) 
+	{
+		if ( mv.m_waterLevel == WaterLevel::WL_Waist )
+		{
+			CheckWaterJump(mv, vars);
+		}
+
+			// If we are falling again, then we must not trying to jump out of water any more.
+		if ( mv.m_vecVelocity[2] < 0 && 
+			 mv.m_flWaterJumpTime )
+		{
+			mv.m_flWaterJumpTime = 0;
+		}
+
+		// Was jump button pressed?
+		if (mv.m_nButtons & IN_JUMP)
+		{
+			CheckJumpButton(mv, vars);
+		}
+		else
+		{
+			mv.m_nOldButtons &= ~IN_JUMP;
+		}
+
+		// Perform regular water movement
+		WaterMove(mv, vars);
+
+		// Redetermine position vars
+		CategorizePosition(mv, vars);
+
+		// If we are on ground, no downward velocity.
+		if ( mv.OnGround )
+		{
+			mv.m_vecVelocity[2] = 0;
+		}
+	}
+	else
+	// Not fully underwater
+	{
+		// Was jump button pressed?
+		if (mv.m_nButtons & IN_JUMP)
+		{
+ 			CheckJumpButton(mv, vars);
+		}
+		else
+		{
+			mv.m_nOldButtons &= ~IN_JUMP;
+		}
+
+		// Fricion is handled before we add in any base velocity. That way, if we are on a conveyor, 
+		//  we don't slow when standing still, relative to the conveyor.
+		if (mv.OnGround)
+		{
+			mv.m_vecVelocity[2] = 0.0;
+			Friction(mv, vars);
+		}
+
+		// Make sure velocity is valid.
+		CheckVelocity(mv, vars);
+
+		if (mv.OnGround)
+		{
+			WalkMove(mv, vars, output);
+		}
+		else
+		{
+			AirMove(mv, vars, output);  // Take into account movement when in air.
+		}
+
+		// Set final flags.
+		CategorizePosition(mv, vars);
+
+		// Make sure velocity is valid.
+		CheckVelocity(mv, vars);
+
+		// Add any remaining gravitational component.
+		if ( !CheckWater(mv, vars) )
+		{
+			FinishGravity(mv, vars);
+		}
+
+		// If we are on ground, no downward velocity.
+		if ( mv.OnGround )
+		{
+			mv.m_vecVelocity[2] = 0;
+		}
+		CheckFalling(mv, vars);
 	}
 }
 
@@ -279,6 +601,122 @@ static int TryPlayerMove(PlayerData &mv, const MovementVars &vars, Vector *pFirs
 	return blocked;
 }
 
+
+static void WalkMove(PlayerData &mv, const MovementVars &vars, const StrafeOutput &output)
+{
+		int i;
+
+	Vector wishvel;
+	float spd;
+	float fmove, smove;
+	Vector wishdir;
+	float wishspeed;
+
+	Vector dest;
+	Strafe::TraceResult pm;
+	Vector forward, right, up;
+
+	AngleVectors (mv.m_vecViewAngles, &forward, &right, &up);  // Determine movement angles
+
+	bool oldground = mv.OnGround;
+	
+	// Copy movement amounts
+	fmove = output.Move[0];
+	smove = output.Move[1];
+
+	// Zero out z components of movement vectors
+	if ( forward[2] != 0 )
+	{
+		forward[2] = 0;
+		forward.VectorNormalize();
+	}
+
+	if ( right[2] != 0 )
+	{
+		right[2] = 0;
+		right.VectorNormalize();
+	}
+
+	for (i=0 ; i<2 ; i++)       // Determine x and y parts of velocity
+		wishvel[i] = forward[i]*fmove + right[i]*smove;
+	
+	wishvel[2] = 0;             // Zero out z part of velocity
+
+	VectorCopy (wishvel, wishdir);   // Determine maginitude of speed of move
+	wishspeed = wishdir.VectorNormalize();
+
+	//
+	// Clamp to server defined max speed
+	//
+	if ((wishspeed != 0.0f) && (wishspeed > vars.Maxspeed))
+	{
+		VectorScale (wishvel, vars.Maxspeed/wishspeed, wishvel);
+		wishspeed = vars.Maxspeed;
+	}
+
+	// Set pmove velocity
+	mv.m_vecVelocity[2] = 0;
+	Accelerate( mv, vars, wishdir, wishspeed);
+	mv.m_vecVelocity[2] = 0;
+
+	// Add in any base velocity to the current velocity.
+	VecAdd (mv.m_vecVelocity, mv.Basevelocity, mv.m_vecVelocity );
+
+	spd = mv.m_vecVelocity.Length();
+
+	if ( spd < 1.0f )
+	{
+		mv.m_vecVelocity.Zero();
+		// Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
+		VecSubtract(mv.m_vecVelocity, mv.Basevelocity, mv->m_vecVelocity );
+		return;
+	}
+
+	// first try just moving to the destination	
+	dest[0] = mv.m_vecAbsOrigin[0] + mv.m_vecVelocity[0]*vars.Frametime;
+	dest[1] = mv.m_vecAbsOrigin[1] + mv.m_vecVelocity[1]*vars.Frametime;
+	dest[2] = mv.m_vecAbsOrigin[2];
+
+	// first try moving directly to the next spot
+	vars.traceFunc(mv.m_vecAbsOrigin, dest, mv);
+
+	// If we made it all the way, then copy trace end as new player position.
+	VecAdd(mv.m_outWishVel, VectorMult(wishdir, wishspeed), mv.m_outWishVel);
+
+	if ( pm.Fraction == 1 )
+	{
+		mv.m_vecAbsOrigin = pm.EndPos;
+		// Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
+		VecSubtract(mv.m_vecVelocity, mv.Basevelocity, mv.m_vecVelocity );
+
+		StayOnGround(mv, vars);
+		return;
+	}
+
+	// Don't walk up stairs if not on ground.
+	if ( oldground == NULL && mv.m_waterLevel == WaterLevel::WL_NotInWater )
+	{
+		// Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
+		VecSubtract(mv.m_vecVelocity, mv.Basevelocity, mv.m_vecVelocity );
+		return;
+	}
+
+	// If we are jumping out of water, don't do anything more.
+	if ( mv.m_flWaterJumpTime )         
+	{
+		// Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
+		VecSubtract(mv.m_vecVelocity, mv.Basevelocity, mv.m_vecVelocity );
+		return;
+	}
+
+	StepMove(mv, vars, dest, pm );
+
+	// Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
+	VecSubtract(mv.m_vecVelocity, mv.Basevelocity, mv.m_vecVelocity );
+
+	StayOnGround(mv, vars);
+}
+
 static void AirMove(PlayerData &mv, const MovementVars &vars, const StrafeOutput &output)
 {
 	int i;
@@ -328,15 +766,6 @@ static void Reset(PlayerData &player)
 
 void Simulate(PlayerData &player, const MovementVars &vars, const StrafeInput &input)
 {
-	Friction(player, vars);
 	auto output = Strafe::Strafe(player, vars, input);
-
-	if (player.OnGround)
-	{
-		WalkMove(player, vars, output);
-	}
-	else
-	{
-		AirMove(player, vars, output);
-	}
+	FullWalkMove(player, vars, output);
 }

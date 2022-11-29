@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <type_traits>
 
 namespace Strafe
@@ -11,13 +12,25 @@ namespace Strafe
 	const int FMOVE_INDEX = 0;
 	const int SMOVE_INDEX = 1;
 	const int UPMOVE_INDEX = 2;
+	const int IN_JUMP = 1 << 1; // TODO: Fix
 	enum class HullType { Standing, Crouching, NumValues };
 	enum class MoveType { Walk };
+	enum class WaterLevel { WL_NotInWater, WL_Feet, WL_Waist, WL_InWater };
 
 	struct Vector
 	{
 		Vector(float x, float y, float z);
 		Vector() = default;
+		Vector operator+(const Vector& rhs);
+		Vector& operator+=(const Vector& rhs);
+		Vector operator-(const Vector& rhs);
+		Vector& operator-=(const Vector& rhs);
+		Vector operator*(float rhs);
+		Vector& operator*=(float rhs);
+		Vector operator-() const;
+
+		float LengthSqr() const;
+		void Init(float x = 0, float y = 0, float z = 0);
 		float x = 0, y = 0, z = 0;
 		float& operator[](int x);
 		bool operator==(const Vector& rhs) const;
@@ -33,12 +46,14 @@ namespace Strafe
 		void Zero();
 	};
 
-	void AngleVectors(const Vector& v, Vector* fwd, Vector* right, Vector* up);
+	void AngleVectors(const Vector& v, Vector* fwd, Vector* right = nullptr, Vector* up = nullptr);
 	int ClipVelocity(Vector& in, Vector& normal, Vector& out, float overbounce);
 	void VectorScale(Vector& src, float scale, Vector& dest);
 	void VectorMA( const Vector& start, float scale, const Vector& direction, Vector& dest );
 	Vector VectorMult(const Vector& src, float scale);
-	void VectorCopy(Vector& src, Vector& dest);
+	float VectorNormalize(Vector& v);
+	float VectorLength(const Vector& v);
+	void VectorCopy(const Vector& src, Vector& dest);
 
     struct PlayerData
 	{
@@ -47,9 +62,15 @@ namespace Strafe
 		Vector m_vecVelocity;
 		Vector Basevelocity;
 		Vector m_outWishVel;
+		Vector m_vecWaterJumpVel;
 		MoveType m_moveType = MoveType::Walk;
+		WaterLevel m_waterLevel = WaterLevel::WL_NotInWater;
+		int m_nFlags = 0;
+		int m_nButtons = 0;
+		int m_nOldButtons = 0;
 		float m_flWaterJumpTime = 0.0f;
 		float m_surfaceFriction = 1.0f;
+		float m_outStepHeight = 0.0f;
 		bool Ducking = false;
 		bool DuckPressed = false;
 		bool OnGround = false;
@@ -65,6 +86,78 @@ namespace Strafe
 		Vector Plane;
 	};
 
+	enum class StrafeType
+	{
+		MaxAccel,
+		MaxAngle,
+		MaxAccelCapped,
+		Direction,
+		NumValues
+	};
+	enum class JumpType
+	{
+		None,
+		ABH,
+		Bhop,
+		Glitchless
+	};
+
+	TraceResult TraceDefault(const Vector &start, const Vector &end, const PlayerData &data);
+	bool TraceGroundDefault(PlayerData &data);
+
+	typedef std::function<TraceResult(const Vector &start, const Vector &end, const PlayerData &data)> TraceFunc;
+	typedef std::function<bool(PlayerData &)> TraceGround;
+
+	struct StrafeInput
+	{
+		float Sidemove = 0.0f;
+		float Forwardmove = 0.0f;
+		StrafeType Stype = StrafeType::MaxAccel;
+		JumpType Jtype = JumpType::ABH;
+		float CappedLimit = 0.0f;
+		double TargetYaw = 0.0;
+		float VectorialOffset = 0.0f;
+		float AngleSpeed = 0.0f;
+		float Scale = 1.0f;
+		float MaxAngleEps = 1e-4f;
+		bool AFH = true;
+		bool Vectorial = true;
+		bool JumpOverride = true;
+		bool Strafe = true;
+		int Version = 6;
+	};
+
+	struct MovementVars
+	{
+		float Accelerate = 10;
+		float Airaccelerate = 10;
+		float EntFriction = 1;
+		float Frametime = 0.015f;
+		float Friction = 4;
+		float Maxspeed = 320;
+		float Stopspeed = 10;
+		float WishspeedCap = 30;
+
+		float EntGravity = 1;
+		float Maxvelocity = 3500;
+		float Gravity = 600;
+		float Stepsize = 20.0f;
+		float Bounce = 0.0f;
+		float DIST_EPSILON = 1e-3;
+		bool m_bAllowAutoMovement = false;
+		bool ReduceWishspeed = false;
+		TraceFunc traceFunc = TraceDefault;
+		TraceGround groundFunc = TraceGroundDefault;
+	};
+
+	struct StrafeOutput
+	{
+		bool Success = false;
+		const char *Error = nullptr;
+		Vector Move;
+		bool Jump = false;
+	};
+
 #ifndef M_PI
 	const double M_PI = 3.14159265358979323846;
 #endif
@@ -75,8 +168,20 @@ namespace Strafe
 	const double M_INVU_RAD = 32768 / M_PI;
 	const double M_INVU_DEG = 65536.0 / 360;
 	const double M_U_DEG_HALF = 180.0 / 65536;
+	extern Vector vec3_origin;
 
 	void SinCos(float value, float* sin, float* cos);
+
+	template<typename T>
+	inline T clamp(T value, T min, T max)
+	{
+		if(value < min)
+			return min;
+		else if(value > max)
+			return max;
+		else
+			return value;
+	}
 
 	template<typename T, std::size_t size = 3>
 	inline void VecCopy(const T& from, T& to)
@@ -207,5 +312,18 @@ namespace Strafe
 	inline double Atan2(double a, double b)
 	{
 		return std::atan2(a, b);
+	}
+
+	inline bool IS_NAN(float f)
+	{
+		return !std::isfinite(f);
+	}
+
+	inline float SimpleSpline( float value )
+	{
+		float valueSquared = value * value;
+
+		// Nice little ease-in, ease-out spline-like curve
+		return (3 * valueSquared - 2 * valueSquared * value);
 	}
 } // namespace Strafe
