@@ -16,11 +16,29 @@
 
 namespace Strafe
 {
+	struct Ray_t
+	{
+		Vector start, end, mins, maxs;
+		void Init(const Vector& start, const Vector& end, const Vector& mins, const Vector& maxs);
+	};
+
 	struct surfacedata_t;
 
 	struct plane_t
 	{
 		Vector normal;
+	};
+
+	struct CBaseEntity
+	{
+		Vector m_vecBaseVelocity;
+		Vector m_vecAbsVelocity;
+		bool m_bValid = false;
+		bool m_bFloating = false;
+		bool m_bHeldByPlayer = false;
+		int index = -1;
+
+		Vector GetAbsVelocity() { return m_vecAbsVelocity; }
 	};
 
 	struct trace_t
@@ -31,7 +49,18 @@ namespace Strafe
 		float fraction = 1.0f;
 		bool allsolid = false;
 		bool startsolid = false;
+		CBaseEntity m_pEnt;
 	};
+
+	struct CBasePlayer;
+
+	typedef std::function<float(trace_t& pm)> GetSurfaceFriction_t;
+	typedef std::function<trace_t(const Ray_t&, const CBasePlayer& player, unsigned int fMask)> TracePlayer_t;
+
+	float GetSurfaceFrictionDefault(trace_t& pm);
+	trace_t TracePlayerDefault(const Ray_t&, const CBasePlayer& player, unsigned int fMask);
+
+	typedef int EntityHandle_t;
 
 	struct CBaseHandle
 	{
@@ -41,34 +70,16 @@ namespace Strafe
 
 	typedef Vector QAngle;
 
-	struct Ray_t
-	{
-		Vector start;
-		Vector end;
-	};
-
 	struct CMoveData
 	{
-		float m_flConstraintRadius = 0;
-		float m_flMaxSpeed = 320;
 		float m_flForwardMove = 0;
 		float m_flSideMove = 0;
 		float m_flUpMove = 0;
-		float m_flClientMaxSpeed = 320;
-		int m_nOldButtons = 0;
-		int m_nButtons = 0;
-		float m_outStepHeight = 0.0f;
-		bool m_bGameCodeMovedPlayer = false;
-		Vector m_vecAbsOrigin;
-		QAngle m_vecAngles;
-		Vector m_vecOldAngles;
-		Vector m_vecVelocity;
 		QAngle m_vecViewAngles;
+
+		float m_outStepHeight = 0.0f;
 		Vector m_outWishVel;
 		Vector m_outJumpVel;
-
-		void SetAbsOrigin(const Vector& rhs) { m_vecAbsOrigin = rhs; }
-		Vector GetAbsOrigin() const { return m_vecAbsOrigin; };
 	};
 
 	struct surfacedata_t
@@ -80,6 +91,8 @@ namespace Strafe
 
 	struct CBasePlayer
 	{
+		virtual ~CBasePlayer() {}
+
 		struct {
 			bool m_bDucked = false;
 			Vector m_vecPunchAngle;
@@ -91,32 +104,37 @@ namespace Strafe
 			float m_flStepSize = 20.0f;
 			bool m_bInDuckJump = false;
 			bool m_bDucking = false;
-			bool m_bSlowMovement = false;
 			float m_flFallVelocity = 0.0f;
 		} m_Local;
 
-		struct {
-			bool deadflag = false;
-		} pl;
-
-		int m_StuckLast = 0;
 		int m_iCommandNumber = 0;
-		int m_iHealth = 100;
 		int m_nFlags = 0;
 		int m_moveType = MOVETYPE_WALK;
 		int m_moveCollide = MOVECOLLIDE_DEFAULT;
 		float m_flWaterJumpTime = 0.0f;
 		float m_surfaceFriction = 1.0f;
+		float m_flClientMaxSpeed = 320.0f;
+		Vector m_vecAbsOrigin;
+		CBaseEntity m_GroundEntity;
 		Vector m_vecViewOffset;
 		Vector m_vecBaseVelocity;
 		Vector m_vecWaterJumpVel;
 		Vector m_vecLadderNormal;
 		surfacedata_t m_pSurfaceData;
 		WaterLevel m_waterLevel;
+		int m_nOldButtons = 0;
+		int m_nButtons = 0;
+		QAngle m_vecAngles;
+		Vector m_vecOldAngles;
+		bool m_bGameCodeMovedPlayer = false;
+		Vector m_vecVelocity;
 		
+		void SetAbsOrigin(const Vector& rhs) { m_vecAbsOrigin = rhs; }
+		Vector GetAbsOrigin() const { return m_vecAbsOrigin; };
+		void SetGroundEntity(CBaseEntity ground);
 		Vector GetViewOffset() { return m_vecViewOffset; }
 		int GetWaterType() { return CONTENTS_WATER; }
-		bool GetGroundEntity() { return m_nFlags & FL_ONGROUND; }
+		virtual CBaseEntity GetGroundEntity();
 		void AddFlag(int flag) { m_nFlags |= flag; }
 		void RemoveFlag(int flag) { m_nFlags &= ~flag; }
 		int GetWaterLevel() const { return (int)m_waterLevel; }
@@ -157,6 +175,8 @@ namespace Strafe
 		float sv_noclipaccelerate = 5.0f;
 		bool sv_specnoclip = true;
 		bool sv_optimizedmovement = true;
+		TracePlayer_t tracePlayerFunc = TracePlayerDefault;
+		GetSurfaceFriction_t surfaceFrictionFunc = GetSurfaceFrictionDefault;
 	};
 
 	class CGameMovement
@@ -175,26 +195,18 @@ namespace Strafe
 		virtual Vector	GetPlayerMins( bool ducked ) const;
 		virtual Vector	GetPlayerMaxs( bool ducked ) const;
 		virtual Vector	GetPlayerViewOffset( bool ducked ) const;
-
+		virtual void TracePlayerBBoxForGround( const Vector& start, const Vector& end, const Vector& minsSrc,
+							  const Vector& maxsSrc, unsigned int fMask,
+							  int collisionGroup, trace_t& pm );
 		virtual void			TracePlayerBBox( const Vector& start, const Vector& end, unsigned int fMask, int collisionGroup, trace_t& pm );
 	#define BRUSH_ONLY true
 		virtual unsigned int PlayerSolidMask( bool brushOnly = false );	///< returns the solid mask for the given player, so bots can have a more-restrictive set
-		CBasePlayer		*player;
+		CBasePlayer *player;
 		CMoveData *GetMoveData() { return mv; }
 
 		GameVars m_gameVars;
 
 	protected:
-		// Input/Output for this movement
-		CMoveData		*mv;
-		
-		WaterLevel		m_nOldWaterLevel;
-		float			m_flWaterEntryTime;
-		int				m_nOnLadder;
-
-		Vector			m_vecForward;
-		Vector			m_vecRight;
-		Vector			m_vecUp;
 
 
 		// Does most of the player movement logic.
@@ -349,7 +361,7 @@ namespace Strafe
 		void			IsometricMove( void );
 
 		// Traces the player bbox as it is swept from start to end
-		virtual CBaseHandle		TestPlayerPosition( const Vector& pos, int collisionGroup, trace_t& pm );
+		virtual CBaseEntity	TestPlayerPosition( const Vector& pos, int collisionGroup, trace_t& pm );
 
 		// Checks to see if we should actually jump 
 		void			PlaySwimSound();
@@ -389,6 +401,18 @@ namespace Strafe
 		bool			m_bSpeedCropped;
 
 		float			m_flStuckCheckTime[MAX_PLAYERS+1][2]; // Last time we did a full test
+
+		// Input/Output for this movement
+		CMoveData		*mv;
+		
+		WaterLevel		m_nOldWaterLevel;
+		float			m_flWaterEntryTime;
+		int				m_nOnLadder;
+
+		Vector			m_vecForward;
+		Vector			m_vecRight;
+		Vector			m_vecUp;
+		float m_flMaxSpeed = 320.0f;
 
 		// special function for teleport-with-duck for episodic
 	#ifdef HL2_EPISODIC
