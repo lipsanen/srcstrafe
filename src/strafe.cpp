@@ -1,4 +1,4 @@
-#include "strafe.hpp"
+#include "srcstrafe/strafe.hpp"
 #include <cmath>
 #include <cstdio>
 

@@ -1,9 +1,9 @@
-#include "strafe_utils.hpp"
+#include "srcstrafe/strafe_utils.h"
 #include <float.h>
 
 using namespace Strafe;
 
-Strafe::Vector vec3_origin;
+Strafe::Vector Strafe::vec3_origin;
 
 float& Vector::operator[](int i)
 {
@@ -266,4 +266,20 @@ Vector& Vector::operator*=(float rhs)
 Vector Vector::operator-() const
 {
     return Vector(-x, -y, -z);
+}
+
+void Ray_t::Init(const Vector& start, const Vector& end, const Vector& mins, const Vector& maxs)
+{
+    this->start = start;
+    this->end = end;
+    this->mins = mins;
+    this->maxs = maxs;
+}
+
+
+void Strafe::VectorScale(Vector& src, float scale, Vector& dest)
+{
+    Vector v = src;
+    v.VectorNormalize();
+    dest = VectorMult(v, scale);
 }

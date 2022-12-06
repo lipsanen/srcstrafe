@@ -1,6 +1,6 @@
 #include <ostream>
-#include "strafe_utils.hpp"
-#include "strafe.hpp"
+#include "srcstrafe/strafe_utils.h"
+#include "srcstrafe/strafe.hpp"
 
 namespace Strafe
 {

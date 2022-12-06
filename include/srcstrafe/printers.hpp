@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include "strafe.hpp"
-#include "strafe_utils.hpp"
+#include "strafe_utils.h"
 
 namespace Strafe
 {

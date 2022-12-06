@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "strafe_utils.hpp"
+#include "srcstrafe/strafe_utils.h"
 #include <cstddef>
 
 using namespace Strafe;

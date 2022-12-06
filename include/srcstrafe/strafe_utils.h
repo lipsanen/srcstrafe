@@ -19,6 +19,8 @@ namespace Strafe
 
 	struct Vector
 	{
+		float x = 0, y = 0, z = 0;
+
 		Vector(float x, float y, float z);
 		Vector() = default;
 		Vector operator+(const Vector& rhs);
@@ -31,7 +33,6 @@ namespace Strafe
 
 		float LengthSqr() const;
 		void Init(float x = 0, float y = 0, float z = 0);
-		float x = 0, y = 0, z = 0;
 		float& operator[](int x);
 		bool operator==(const Vector& rhs) const;
 		const float& operator[](int x) const;
@@ -44,6 +45,19 @@ namespace Strafe
 		void Add(const Vector& rhs);
 		void Subtract(const Vector& rhs);
 		void Zero();
+	};
+
+	enum class IntervalType_t
+	{
+		GROUND = 0,
+		STUCK,
+		LADDER
+	};
+
+	struct Ray_t
+	{
+		Vector start, end, mins, maxs;
+		void Init(const Vector& start, const Vector& end, const Vector& mins, const Vector& maxs);
 	};
 
 	void AngleVectors(const Vector& v, Vector* fwd, Vector* right = nullptr, Vector* up = nullptr);

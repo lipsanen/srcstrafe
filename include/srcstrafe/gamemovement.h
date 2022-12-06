@@ -1,9 +1,9 @@
 #pragma once
 
 #include "const.h"
-#include "strafe_utils.hpp"
+#include "srcstrafe/strafe_utils.h"
+#include "srcstrafe/shareddefs.h"
 #include "bspflags.h"
-#include "shareddefs.h"
 
 #define CTEXTURESMAX		512			// max number of textures loaded
 #define CBTEXTURENAMEMAX	13			// only load first n chars of name
@@ -16,13 +16,8 @@
 
 namespace Strafe
 {
-	struct Ray_t
-	{
-		Vector start, end, mins, maxs;
-		void Init(const Vector& start, const Vector& end, const Vector& mins, const Vector& maxs);
-	};
-
 	struct surfacedata_t;
+	struct GameVars;
 
 	struct plane_t
 	{
@@ -59,6 +54,13 @@ namespace Strafe
 
 	float GetSurfaceFrictionDefault(trace_t& pm);
 	trace_t TracePlayerDefault(const Ray_t&, const CBasePlayer& player, unsigned int fMask);
+	bool CheckInterval(const GameVars* vars, const CBasePlayer* player, IntervalType_t type );
+	Vector	GetPlayerMins( const CBasePlayer* player );
+	Vector  GetPlayerMins( bool ducked );
+	Vector	GetPlayerMaxs( const CBasePlayer* player );
+	Vector  GetPlayerMaxs( bool ducked );
+	void CategorizeGroundSurface( CBasePlayer* player, const GameVars* vars, trace_t &pm );
+	bool CheckWater( const CBasePlayer* player );
 
 	typedef int EntityHandle_t;
 
@@ -76,10 +78,6 @@ namespace Strafe
 		float m_flSideMove = 0;
 		float m_flUpMove = 0;
 		QAngle m_vecViewAngles;
-
-		float m_outStepHeight = 0.0f;
-		Vector m_outWishVel;
-		Vector m_outJumpVel;
 	};
 
 	struct surfacedata_t
@@ -189,11 +187,7 @@ namespace Strafe
 		virtual void	ProcessMovement( CBasePlayer *pPlayer, CMoveData *pMove );
 
 		virtual int     GetPointContents(const Vector& v) { return CONTENTS_SOLID; };
-		virtual void	StartTrackPredictionErrors( CBasePlayer *pPlayer );
-		virtual void	FinishTrackPredictionErrors( CBasePlayer *pPlayer );
 		virtual void	DiffPrint( char const *fmt, ... );
-		virtual Vector	GetPlayerMins( bool ducked ) const;
-		virtual Vector	GetPlayerMaxs( bool ducked ) const;
 		virtual Vector	GetPlayerViewOffset( bool ducked ) const;
 		virtual void TracePlayerBBoxForGround( const Vector& start, const Vector& end, const Vector& minsSrc,
 							  const Vector& maxsSrc, unsigned int fMask,
@@ -250,23 +244,6 @@ namespace Strafe
 		// Implement this if you want to know when the player collides during OnPlayerMove
 		virtual void	OnTryPlayerMoveCollision( trace_t &tr ) {}
 
-		virtual Vector	GetPlayerMins( void ) const; // uses local player
-		virtual Vector	GetPlayerMaxs( void ) const; // uses local player
-
-		typedef enum
-		{
-			GROUND = 0,
-			STUCK,
-			LADDER
-		} IntervalType_t;
-
-		virtual int		GetCheckInterval( IntervalType_t type );
-
-		// Useful for things that happen periodically. This lets things happen on the specified interval, but
-		// spaces the events onto different frames for different players so they don't all hit their spikes
-		// simultaneously.
-		bool			CheckInterval( IntervalType_t type );
-
 
 		// Decompoosed gravity
 		void			StartGravity( void );
@@ -317,11 +294,6 @@ namespace Strafe
 		// allow for the cut precision of the net coordinates
 		virtual int				CheckStuck( void );
 		
-		// Check if the point is in water.
-		// Sets refWaterLevel and refWaterType appropriately.
-		// If in water, applies current to baseVelocity, and returns true.
-		virtual bool			CheckWater( void );
-		
 		// Determine if player is in water, on ground, etc.
 		virtual void CategorizePosition( void );
 
@@ -352,8 +324,6 @@ namespace Strafe
 		void			FixPlayerCrouchStuck( bool moveup );
 
 		float			SplineFraction( float value, float scale );
-
-		void			CategorizeGroundSurface( trace_t &pm );
 
 		bool			InWater( void );
 

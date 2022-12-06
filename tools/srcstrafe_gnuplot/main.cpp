@@ -1,4 +1,4 @@
-#include "strafe.hpp"
+#include "srcstrafe/strafe.hpp"
 #include <cstdio>
 
 // Outputs some data for gnuplot, maybe this will also draw things in the future
