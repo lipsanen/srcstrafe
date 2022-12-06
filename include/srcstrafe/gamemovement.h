@@ -5,22 +5,26 @@
 #include "srcstrafe/shareddefs.h"
 #include "bspflags.h"
 
-#define CTEXTURESMAX		512			// max number of textures loaded
-#define CBTEXTURENAMEMAX	13			// only load first n chars of name
+#define CTEXTURESMAX 512	// max number of textures loaded
+#define CBTEXTURENAMEMAX 13 // only load first n chars of name
 
-#define GAMEMOVEMENT_DUCK_TIME				1000.0f		// ms
-#define GAMEMOVEMENT_JUMP_TIME				510.0f		// ms approx - based on the 21 unit height jump
-#define GAMEMOVEMENT_JUMP_HEIGHT			21.0f		// units
-#define GAMEMOVEMENT_TIME_TO_UNDUCK			( TIME_TO_UNDUCK * 1000.0f )		// ms
-#define GAMEMOVEMENT_TIME_TO_UNDUCK_INV		( GAMEMOVEMENT_DUCK_TIME - GAMEMOVEMENT_TIME_TO_UNDUCK )
+#define GAMEMOVEMENT_DUCK_TIME 1000.0f						   // ms
+#define GAMEMOVEMENT_JUMP_TIME 510.0f						   // ms approx - based on the 21 unit height jump
+#define GAMEMOVEMENT_JUMP_HEIGHT 21.0f						   // units
+#define GAMEMOVEMENT_TIME_TO_UNDUCK (TIME_TO_UNDUCK * 1000.0f) // ms
+#define GAMEMOVEMENT_TIME_TO_UNDUCK_INV (GAMEMOVEMENT_DUCK_TIME - GAMEMOVEMENT_TIME_TO_UNDUCK)
 
 namespace Strafe
 {
 	struct surfacedata_t;
 	struct GameVars;
+	struct CMoveData;
+	typedef int EntityHandle_t;
+	struct CBasePlayer;
 
 	struct plane_t
 	{
+		plane_t() {normal.z = 1.0f;}
 		Vector normal;
 	};
 
@@ -47,27 +51,46 @@ namespace Strafe
 		CBaseEntity m_pEnt;
 	};
 
-	struct CBasePlayer;
+	typedef std::function<float(trace_t &pm)> GetSurfaceFriction_t;
+	typedef std::function<trace_t(const Ray_t &, const CBasePlayer &player, unsigned int fMask)> TracePlayer_t;
+	typedef std::function<void(int dmg)> TakeDamage_t;
 
-	typedef std::function<float(trace_t& pm)> GetSurfaceFriction_t;
-	typedef std::function<trace_t(const Ray_t&, const CBasePlayer& player, unsigned int fMask)> TracePlayer_t;
-
-	float GetSurfaceFrictionDefault(trace_t& pm);
-	trace_t TracePlayerDefault(const Ray_t&, const CBasePlayer& player, unsigned int fMask);
-	bool CheckInterval(const GameVars* vars, const CBasePlayer* player, IntervalType_t type );
-	Vector	GetPlayerMins( const CBasePlayer* player );
-	Vector  GetPlayerMins( bool ducked );
-	Vector	GetPlayerMaxs( const CBasePlayer* player );
-	Vector  GetPlayerMaxs( bool ducked );
-	void CategorizeGroundSurface( CBasePlayer* player, const GameVars* vars, trace_t &pm );
-	bool CheckWater( const CBasePlayer* player );
-
-	typedef int EntityHandle_t;
+	float GetSurfaceFrictionDefault(trace_t &pm);
+	trace_t TracePlayerDefault(const Ray_t &, const CBasePlayer &player, unsigned int fMask);
+	void TakeDamageDefault(int dmg);
+	bool CheckInterval(const GameVars *vars, const CBasePlayer *player, IntervalType_t type);
+	Vector GetPlayerMins(const CBasePlayer *player);
+	Vector GetPlayerMins(bool ducked);
+	Vector GetPlayerMaxs(const CBasePlayer *player);
+	Vector GetPlayerMaxs(bool ducked);
+	void CategorizeGroundSurface(CBasePlayer *player, const GameVars *vars, trace_t &pm);
+	bool CheckWater(const CBasePlayer *player);
+	void TracePlayerBBoxForGround(const GameVars *vars, const CBasePlayer *player, const Vector &start, const Vector &end, const Vector &minsSrc,
+								  const Vector &maxsSrc, unsigned int fMask,
+								  int collisionGroup, trace_t &pm);
+	void TracePlayerBBox(const CBasePlayer *player, const GameVars *vars, const Vector &start, const Vector &end, unsigned int fMask, int collisionGroup, trace_t &pm);
+	unsigned int PlayerSolidMask(bool brushOnly = false); ///< returns the solid mask for the given player, so bots can have a more-restrictive set
+	CBaseEntity TestPlayerPosition(const CBasePlayer *player, const GameVars *vars, const Vector &pos, int collisionGroup, trace_t &pm);
+	void Accelerate( CBasePlayer* player, const GameVars* vars, Vector& wishdir, float wishspeed, float accel);
+	void AirAccelerate(CBasePlayer* player, const GameVars* vars, Vector &wishdir, float wishspeed, float accel);
+	void StartGravity(CBasePlayer* player, const GameVars* vars);
+	void CheckVelocity(CBasePlayer* player, const GameVars* vars);
 
 	struct CBaseHandle
 	{
 		int index = -1;
 		int serial = -1;
+	};
+
+	struct MovementState
+	{
+		float m_flMaxSpeed = 320.0f;
+		Vector m_vecForward;
+		Vector m_vecRight;
+		Vector m_vecUp;
+		bool m_bSpeedCropped = false;
+		// Input/Output for this movement
+		CMoveData *mv = nullptr;
 	};
 
 	typedef Vector QAngle;
@@ -91,7 +114,8 @@ namespace Strafe
 	{
 		virtual ~CBasePlayer() {}
 
-		struct {
+		struct
+		{
 			bool m_bDucked = false;
 			Vector m_vecPunchAngle;
 			Vector m_vecPunchAngleVel;
@@ -105,6 +129,7 @@ namespace Strafe
 			float m_flFallVelocity = 0.0f;
 		} m_Local;
 
+		CBaseEntity m_GroundEntity;
 		int m_iCommandNumber = 0;
 		int m_nFlags = 0;
 		int m_moveType = MOVETYPE_WALK;
@@ -112,33 +137,30 @@ namespace Strafe
 		float m_flWaterJumpTime = 0.0f;
 		float m_surfaceFriction = 1.0f;
 		float m_flClientMaxSpeed = 320.0f;
+		WaterLevel m_waterLevel = WaterLevel::WL_NotInWater;
+		bool m_bGameCodeMovedPlayer = false;
 		Vector m_vecAbsOrigin;
-		CBaseEntity m_GroundEntity;
 		Vector m_vecViewOffset;
 		Vector m_vecBaseVelocity;
 		Vector m_vecWaterJumpVel;
 		Vector m_vecLadderNormal;
 		surfacedata_t m_pSurfaceData;
-		WaterLevel m_waterLevel;
 		int m_nOldButtons = 0;
 		int m_nButtons = 0;
 		QAngle m_vecAngles;
 		Vector m_vecOldAngles;
-		bool m_bGameCodeMovedPlayer = false;
 		Vector m_vecVelocity;
-		
-		void SetAbsOrigin(const Vector& rhs) { m_vecAbsOrigin = rhs; }
+
+		void SetAbsOrigin(const Vector &rhs) { m_vecAbsOrigin = rhs; }
 		Vector GetAbsOrigin() const { return m_vecAbsOrigin; };
-		void SetGroundEntity(CBaseEntity ground);
 		Vector GetViewOffset() { return m_vecViewOffset; }
 		int GetWaterType() { return CONTENTS_WATER; }
-		virtual CBaseEntity GetGroundEntity();
 		void AddFlag(int flag) { m_nFlags |= flag; }
 		void RemoveFlag(int flag) { m_nFlags &= ~flag; }
 		int GetWaterLevel() const { return (int)m_waterLevel; }
 		Vector GetBaseVelocity() const { return m_vecBaseVelocity; }
-		void SetBaseVelocity(const Vector& rhs) { m_vecBaseVelocity = rhs; }
-		void SetViewOffset(const Vector& rhs) { m_vecViewOffset = rhs; }
+		void SetBaseVelocity(const Vector &rhs) { m_vecBaseVelocity = rhs; }
+		void SetViewOffset(const Vector &rhs) { m_vecViewOffset = rhs; }
 		int GetMoveType() const { return m_moveType; }
 		int GetFlags() const { return m_nFlags; }
 		int CurrentCommandNumber() const { return m_iCommandNumber; }
@@ -175,221 +197,155 @@ namespace Strafe
 		bool sv_optimizedmovement = true;
 		TracePlayer_t tracePlayerFunc = TracePlayerDefault;
 		GetSurfaceFriction_t surfaceFrictionFunc = GetSurfaceFrictionDefault;
+		TakeDamage_t takeDamageFunc = TakeDamageDefault;
 	};
 
 	class CGameMovement
 	{
 	public:
-		
-		CGameMovement( void );
-		virtual			~CGameMovement( void );
+		CGameMovement(void);
+		virtual ~CGameMovement(void);
 
-		virtual void	ProcessMovement( CBasePlayer *pPlayer, CMoveData *pMove );
+		virtual void ProcessMovement(CBasePlayer *pPlayer, CMoveData *pMove);
 
-		virtual int     GetPointContents(const Vector& v) { return CONTENTS_SOLID; };
-		virtual void	DiffPrint( char const *fmt, ... );
-		virtual Vector	GetPlayerViewOffset( bool ducked ) const;
-		virtual void TracePlayerBBoxForGround( const Vector& start, const Vector& end, const Vector& minsSrc,
-							  const Vector& maxsSrc, unsigned int fMask,
-							  int collisionGroup, trace_t& pm );
-		virtual void			TracePlayerBBox( const Vector& start, const Vector& end, unsigned int fMask, int collisionGroup, trace_t& pm );
-	#define BRUSH_ONLY true
-		virtual unsigned int PlayerSolidMask( bool brushOnly = false );	///< returns the solid mask for the given player, so bots can have a more-restrictive set
+		virtual int GetPointContents(const Vector &v) { return CONTENTS_SOLID; };
+		virtual void DiffPrint(char const *fmt, ...);
+		virtual Vector GetPlayerViewOffset(bool ducked) const;
+		CMoveData *GetMoveData() { return m_State.mv; }
+
 		CBasePlayer *player;
-		CMoveData *GetMoveData() { return mv; }
-
 		GameVars m_gameVars;
+		MovementState m_State;
 
 	protected:
-
+		void SetGroundEntity(CBaseEntity ground);
+		virtual CBaseEntity GetGroundEntity();
 
 		// Does most of the player movement logic.
 		// Returns with origin, angles, and velocity modified in place.
 		// were contacted during the move.
-		virtual float GetTickInterval();
-		virtual void	PlayerMove(	void );
+		virtual void PlayerMove(void);
 
 		// Set ground data, etc.
-		void			FinishMove( void );
+		void FinishMove(void);
 
-		virtual float	CalcRoll( const QAngle &angles, const Vector &velocity, float rollangle, float rollspeed );
+		virtual float CalcRoll(const QAngle &angles, const Vector &velocity, float rollangle, float rollspeed);
 
-		virtual	void	DecayPunchAngle( void );
+		virtual void DecayPunchAngle(void);
 
-		virtual void	CheckWaterJump(void );
+		virtual void CheckWaterJump(void);
 
-		virtual void	WaterMove( void );
+		virtual void WaterMove(void);
 
-		void			WaterJump( void );
+		void WaterJump(void);
 
 		// Handles both ground friction and water friction
-		void			Friction( void );
+		void Friction(void);
 
-		virtual void	AirAccelerate( Vector& wishdir, float wishspeed, float accel );
-
-		virtual void	AirMove( void );
-		
-		virtual bool	CanAccelerate();
-		virtual void	Accelerate( Vector& wishdir, float wishspeed, float accel);
+		virtual void AirMove(void);
 
 		// Only used by players.  Moves along the ground when player is a MOVETYPE_WALK.
-		virtual void	WalkMove( void );
+		virtual void WalkMove(void);
 
 		// Try to keep a walking player on the ground when running down slopes etc
-		void			StayOnGround( void );
+		void StayOnGround(void);
 
 		// Handle MOVETYPE_WALK.
-		virtual void	FullWalkMove();
+		virtual void FullWalkMove();
 
 		// Implement this if you want to know when the player collides during OnPlayerMove
-		virtual void	OnTryPlayerMoveCollision( trace_t &tr ) {}
-
+		virtual void OnTryPlayerMoveCollision(trace_t &tr) {}
 
 		// Decompoosed gravity
-		void			StartGravity( void );
-		void			FinishGravity( void );
+		void FinishGravity(void);
 
 		// Apply normal ( undecomposed ) gravity
-		void			AddGravity( void );
+		void AddGravity(void);
 
 		// Handle movement in noclip mode.
-		void			FullNoClipMove( float factor, float maxacceleration );
+		void FullNoClipMove(float factor, float maxacceleration);
 
 		// Returns true if he started a jump (ie: should he play the jump animation)?
-		virtual bool	CheckJumpButton( void );	// Overridden by each game.
-
-		// Dead player flying through air., e.g.
-		virtual void    FullTossMove( void );
-		
-		// Player is a Observer chasing another player
-		void			FullObserverMove( void );
+		virtual bool CheckJumpButton(void); // Overridden by each game.
 
 		// Handle movement when in MOVETYPE_LADDER mode.
-		virtual void	FullLadderMove();
+		virtual void FullLadderMove();
 
 		// The basic solid body movement clip that slides along multiple planes
-		virtual int		TryPlayerMove( Vector *pFirstDest=NULL, trace_t *pFirstTrace=NULL );
-		
-		virtual bool	LadderMove( void );
-		virtual bool	OnLadder( trace_t &trace );
-		virtual float	LadderDistance( void ) const { return 2.0f; }	///< Returns the distance a player can be from a ladder and still attach to it
-		virtual unsigned int LadderMask( void ) const { return MASK_PLAYERSOLID; }
-		virtual float	ClimbSpeed( void ) const { return MAX_CLIMB_SPEED; }
-		virtual float	LadderLateralMultiplier( void ) const { return 1.0f; }
+		virtual int TryPlayerMove(Vector *pFirstDest = NULL, trace_t *pFirstTrace = NULL);
 
-		// See if the player has a bogus velocity value.
-		void			CheckVelocity( void );
+		virtual bool LadderMove(void);
+		virtual bool OnLadder(trace_t &trace);
+		virtual float LadderDistance(void) const { return 2.0f; } ///< Returns the distance a player can be from a ladder and still attach to it
+		virtual unsigned int LadderMask(void) const { return MASK_PLAYERSOLID; }
+		virtual float ClimbSpeed(void) const { return MAX_CLIMB_SPEED; }
+		virtual float LadderLateralMultiplier(void) const { return 1.0f; }
 
 		// Does not change the entities velocity at all
-		void			PushEntity( Vector& push, trace_t *pTrace );
+		void PushEntity(Vector &push, trace_t *pTrace);
 
 		// Slide off of the impacting object
 		// returns the blocked flags:
 		// 0x01 == floor
 		// 0x02 == step / wall
-		int				ClipVelocity( Vector& in, Vector& normal, Vector& out, float overbounce );
+		int ClipVelocity(Vector &in, Vector &normal, Vector &out, float overbounce);
 
 		// If pmove.origin is in a solid position,
 		// try nudging slightly on all axis to
 		// allow for the cut precision of the net coordinates
-		virtual int				CheckStuck( void );
-		
+		virtual int CheckStuck(void);
+
 		// Determine if player is in water, on ground, etc.
-		virtual void CategorizePosition( void );
+		virtual void CategorizePosition(void);
 
-		virtual void	CheckParameters( void );
+		virtual void CheckParameters(void);
 
-		virtual	void	ReduceTimers( void );
+		virtual void ReduceTimers(void);
 
-		virtual void	CheckFalling( void );
+		virtual void CheckFalling(void);
 
-		virtual void	PlayerRoughLandingEffects( float fvol );
+		virtual void PlayerRoughLandingEffects(float fvol);
 
-		void			PlayerWaterSounds( void );
+		void PlayerWaterSounds(void);
 
 		void ResetGetPointContentsCache();
-		int GetPointContentsCached( const Vector &point, int slot );
+		int GetPointContentsCached(const Vector &point, int slot);
 
 		// Ducking
-		virtual void	Duck( void );
-		virtual void	HandleDuckingSpeedCrop();
-		virtual void	FinishUnDuck( void );
-		virtual void	FinishDuck( void );
-		virtual bool	CanUnduck();
-		void			UpdateDuckJumpEyeOffset( void );
-		bool			CanUnDuckJump( trace_t &trace );
-		void			StartUnDuckJump( void );
-		void			FinishUnDuckJump( trace_t &trace );
-		void			SetDuckedEyeOffset( float duckFraction );
-		void			FixPlayerCrouchStuck( bool moveup );
+		virtual void Duck(void);
+		virtual void HandleDuckingSpeedCrop();
+		virtual void FinishUnDuck(void);
+		virtual void FinishDuck(void);
+		virtual bool CanUnduck();
+		void UpdateDuckJumpEyeOffset(void);
+		bool CanUnDuckJump(trace_t &trace);
+		void StartUnDuckJump(void);
+		void FinishUnDuckJump(trace_t &trace);
+		void SetDuckedEyeOffset(float duckFraction);
+		void FixPlayerCrouchStuck(bool moveup);
 
-		float			SplineFraction( float value, float scale );
+		float SplineFraction(float value, float scale);
 
-		bool			InWater( void );
+		bool InWater(void);
 
-		// Commander view movement
-		void			IsometricMove( void );
+		virtual void SetGroundEntity(trace_t *pm);
 
-		// Traces the player bbox as it is swept from start to end
-		virtual CBaseEntity	TestPlayerPosition( const Vector& pos, int collisionGroup, trace_t& pm );
-
-		// Checks to see if we should actually jump 
-		void			PlaySwimSound();
-
-		bool			IsDead( void ) const;
-
-		// Figures out how the constraint should slow us down
-		float			ComputeConstraintSpeedFactor( void );
-
-		virtual void	SetGroundEntity( trace_t *pm );
-
-		virtual void	StepMove( Vector &vecDestination, trace_t &trace );
+		virtual void StepMove(Vector &vecDestination, trace_t &trace);
 
 	protected:
-
 		// Performs the collision resolution for fliers.
-		void			PerformFlyCollisionResolution( trace_t &pm, Vector &move );
+		void PerformFlyCollisionResolution(trace_t &pm, Vector &move);
 
-		virtual bool	GameHasLadders() const;
+		virtual bool GameHasLadders() const;
 
-		enum
-		{
-			// eyes, waist, feet points (since they are all deterministic
-			MAX_PC_CACHE_SLOTS = 3,
-		};
+		// private:
 
-		// Cache used to remove redundant calls to GetPointContents().
-		int m_CachedGetPointContents[ MAX_PLAYERS ][ MAX_PC_CACHE_SLOTS ];
-		Vector m_CachedGetPointContentsPoint[ MAX_PLAYERS ][ MAX_PC_CACHE_SLOTS ];	
-
-		Vector			m_vecProximityMins;		// Used to be globals in sv_user.cpp.
-		Vector			m_vecProximityMaxs;
-
-		float			m_fFrameTime;
-
-	//private:
-		bool			m_bSpeedCropped;
-
-		float			m_flStuckCheckTime[MAX_PLAYERS+1][2]; // Last time we did a full test
-
-		// Input/Output for this movement
-		CMoveData		*mv;
-		
-		WaterLevel		m_nOldWaterLevel;
-		float			m_flWaterEntryTime;
-		int				m_nOnLadder;
-
-		Vector			m_vecForward;
-		Vector			m_vecRight;
-		Vector			m_vecUp;
-		float m_flMaxSpeed = 320.0f;
-
+		//float m_flStuckCheckTime[MAX_PLAYERS + 1][2]; // Last time we did a full test
 		// special function for teleport-with-duck for episodic
-	#ifdef HL2_EPISODIC
+#ifdef HL2_EPISODIC
 	public:
-		void			ForceDuck( void );
+		void ForceDuck(void);
 
-	#endif
+#endif
 	};
 }
-
