@@ -232,7 +232,7 @@ float Vector::LengthSqr() const
     return this->Dot(*this);
 }
 
-Vector Vector::operator+(const Vector& rhs)
+Vector Vector::operator+(const Vector& rhs) const
 {
     return Vector(x + rhs.x, y + rhs.y, z + rhs.z);
 }
@@ -242,7 +242,7 @@ Vector& Vector::operator+=(const Vector& rhs)
     return *this = *this + rhs;
 }
 
-Vector Vector::operator-(const Vector& rhs)
+Vector Vector::operator-(const Vector& rhs) const
 {
     return Vector(x - rhs.x, y - rhs.y, z - rhs.z);
 }

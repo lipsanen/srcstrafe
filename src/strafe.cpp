@@ -264,13 +264,9 @@ double Strafe::StrafeTheta(const PlayerData &player, const MovementVars &vars, c
     return 0;
 }
 
-TraceResult Strafe::TraceDefault(const Vector &start, const Vector &end, const PlayerData& data)
+trace_t Strafe::TraceDefault(const Vector &start, const Vector &end, const PlayerData& data)
 {
-    TraceResult result;
-    result.AllSolid = false;
-    result.EndPos = end;
-    result.Fraction = 1.0f;
-    result.StartSolid = false;
+    trace_t result;
 
     return result;
 }

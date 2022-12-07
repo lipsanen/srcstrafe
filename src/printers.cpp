@@ -42,16 +42,6 @@ namespace Strafe
         os << ")";
         return os;
     }
-    std::ostream &operator<<(std::ostream &os, const TraceResult &v)
-    {
-        os << "TraceResult(";
-        os << "AllSolid=" << v.AllSolid;
-        os << ", StartSolid=" << v.StartSolid;
-        os << ", Fraction=" << v.Fraction;
-        os << ", EndPos=" << v.EndPos;
-        os << ")";
-        return os;
-    }
     std::ostream &operator<<(std::ostream &os, StrafeType StrafeType)
     {
         switch (StrafeType)

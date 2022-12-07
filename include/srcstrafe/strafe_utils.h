@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <functional>
 #include <type_traits>
+#include "srcstrafe/entity.hpp"
+#include "srcstrafe/vector.hpp"
 
 namespace Strafe
 {
@@ -15,37 +17,6 @@ namespace Strafe
 	const int IN_JUMP = 1 << 1; // TODO: Fix
 	enum class HullType { Standing, Crouching, NumValues };
 	enum class MoveType { Walk };
-	enum class WaterLevel { WL_NotInWater, WL_Feet, WL_Waist, WL_InWater };
-
-	struct Vector
-	{
-		float x = 0, y = 0, z = 0;
-
-		Vector(float x, float y, float z);
-		Vector() = default;
-		Vector operator+(const Vector& rhs);
-		Vector& operator+=(const Vector& rhs);
-		Vector operator-(const Vector& rhs);
-		Vector& operator-=(const Vector& rhs);
-		Vector operator*(float rhs);
-		Vector& operator*=(float rhs);
-		Vector operator-() const;
-
-		float LengthSqr() const;
-		void Init(float x = 0, float y = 0, float z = 0);
-		float& operator[](int x);
-		bool operator==(const Vector& rhs) const;
-		const float& operator[](int x) const;
-		float Length2D() const;
-		float Length() const;
-		float Dot2D(const Vector& rhs) const;
-		float Dot(const Vector& rhs) const;
-		float VectorNormalize();
-		void Scale(float f);
-		void Add(const Vector& rhs);
-		void Subtract(const Vector& rhs);
-		void Zero();
-	};
 
 	enum class IntervalType_t
 	{
@@ -53,21 +24,6 @@ namespace Strafe
 		STUCK,
 		LADDER
 	};
-
-	struct Ray_t
-	{
-		Vector start, end, mins, maxs;
-		void Init(const Vector& start, const Vector& end, const Vector& mins, const Vector& maxs);
-	};
-
-	void AngleVectors(const Vector& v, Vector* fwd, Vector* right = nullptr, Vector* up = nullptr);
-	int ClipVelocity(Vector& in, Vector& normal, Vector& out, float overbounce);
-	void VectorScale(Vector& src, float scale, Vector& dest);
-	void VectorMA( const Vector& start, float scale, const Vector& direction, Vector& dest );
-	Vector VectorMult(const Vector& src, float scale);
-	float VectorNormalize(Vector& v);
-	float VectorLength(const Vector& v);
-	void VectorCopy(const Vector& src, Vector& dest);
 
     struct PlayerData
 	{
@@ -91,15 +47,6 @@ namespace Strafe
 		bool CantJump = false;
 	};
 
-	struct TraceResult
-	{
-		bool AllSolid;
-		bool StartSolid;
-		float Fraction;
-		Vector EndPos;
-		Vector Plane;
-	};
-
 	enum class StrafeType
 	{
 		MaxAccel,
@@ -116,10 +63,10 @@ namespace Strafe
 		Glitchless
 	};
 
-	TraceResult TraceDefault(const Vector &start, const Vector &end, const PlayerData &data);
+	trace_t TraceDefault(const Vector &start, const Vector &end, const PlayerData &data);
 	bool TraceGroundDefault(PlayerData &data);
 
-	typedef std::function<TraceResult(const Vector &start, const Vector &end, const PlayerData &data)> TraceFunc;
+	typedef std::function<trace_t(const Vector &start, const Vector &end, const PlayerData &data)> TraceFunc;
 	typedef std::function<bool(PlayerData &)> TraceGround;
 
 	struct StrafeInput

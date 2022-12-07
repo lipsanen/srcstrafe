@@ -1,7 +1,5 @@
 #pragma once
 
-#include "strafe_utils.h"
-
 namespace Strafe
 {
     #define VEC_HULL_MIN		Vector(0, 0, 0)
