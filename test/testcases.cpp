@@ -3,6 +3,8 @@
 #include "srcstrafe/in_buttons.h"
 #include "srcstrafe/surface.hpp"
 
+using namespace Strafe;
+
 TEST(GameMovement, BasicAirCase)
 {
     const float maxspeed = 320.0f;
@@ -57,49 +59,13 @@ TEST(GameMovement, BasicJumpCase)
     EXPECT_EQ(player.m_vecVelocity[2], 146.5f);
 }
 
-
-using namespace Strafe;
-
-static Strafe::TracePlayer_t GetZTraceFunc(float floorZ)
-{
-    
-    
-    Strafe::TracePlayer_t func = [=](const Ray_t & t, const CBasePlayer &player, unsigned int fMask) {
-        trace_t result;
-        float len = std::abs(t.end.z - t.start.z);
-        if(t.end.z <= floorZ)
-        {
-            float traveled = std::abs(floorZ - t.start.z);
-            if(len < 1e-3)
-                result.fraction = 1.0f;
-            else
-                result.fraction = traveled / len;
-            result.m_pEnt.m_bValid = true;
-            Vector delta;
-            Vector start = t.start;
-            VecSubtract(t.end, start, delta);
-            result.endpos = start + VectorMult(delta, result.fraction);
-        }
-        else
-        {
-            result.fraction = 1.0f;
-        }
-
-        return result;
-    };
-
-    return func;
-}
-
 TEST(GameMovement, FallDamage)
 {
-    const float maxspeed = 320.0f;
     Strafe::CGameMovement movement;
     Strafe::CBasePlayer player;
     Strafe::CMoveData data;
     player.m_vecVelocity[2] = -1000.0f;
     int damage = 0;
-    int iteration = 0;
 
     Strafe::Surface surface = surface.GetZSurface(-10.0f);
     auto damagetaken = [&](int dmg) { damage += dmg; };
@@ -111,6 +77,27 @@ TEST(GameMovement, FallDamage)
     movement.ProcessMovement(&player, &data);
     EXPECT_EQ(damage, 94);
     EXPECT_EQ(player.m_vecAbsOrigin[2], -10.0f);
+}
+
+TEST(GameMovement, JumpAndLand)
+{
+    const float z = 960.031250f;
+    Strafe::CGameMovement movement;
+    Strafe::CBasePlayer player;
+    Strafe::CMoveData data;
+    player.m_nButtons |= IN_JUMP;
+    player.m_vecAbsOrigin[2] = z;
+
+    Strafe::Surface surface = Surface::GetZSurface(z);
+    movement.m_gameVars.tracePlayerFunc = [&] (const Ray_t & r, const CBasePlayer &player, unsigned int fMask) {
+        return surface.Trace(r, player, fMask);
+    };
+
+    for(size_t i=0; i < 35; ++i)
+    {
+        movement.ProcessMovement(&player, &data);
+    }
+    EXPECT_NEAR(player.m_vecAbsOrigin[2], 961.306274f, 1e-5);
 }
 
 TEST(GameMovement, BoundingBoxed)
